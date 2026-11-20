@@ -17,7 +17,7 @@ The home page (`index.html`) opens with a **layered-architecture diagram** (Appl
 | 1 | `m1-bits.html` | bits/bytes, binary, two's complement, UTF-8, text/images/audio as numbers, floating point, fp32/fp16/bf16/int8/int4, quantisation, model size = params × bytes |
 | 2 | `m2-memory.html` | memory hierarchy (registers → cache → RAM → SSD → network), latency vs bandwidth, cache lines, loading a model into VRAM, caching in AI services |
 | 3 | `m3-cpu-gpu.html` | fetch-decode-execute, cores, SIMD/SIMT, what a layer computes (weighted sums), why GPUs suit matmul, ~2×params operations per token, memory bandwidth limits generation speed |
-| 4 | `m4-os.html` | kernel, system calls, process vs thread, scheduling, virtual memory, swap, OOM killer, shell basics, Linux vs macOS vs Windows vs WSL2 |
+| 4 | `m4-os.html` | kernel, system calls, process vs thread, scheduling, virtual memory, swap, OOM killer, how you talk to the OS (system calls = the OS API, commands like ls/cat/grep, stdin/stdout, pipes, redirection, shell vs terminal vs GUI, layered diagram), Linux vs macOS vs Windows vs WSL2 |
 | 5 | `m5-software.html` | compiled vs interpreted, libraries, venv, containers, the GPU stack, the AI ecosystem (frameworks, model files, hubs, inference engines, hosted APIs) |
 | 6 | `m6-networking.html` | IP, ports, DNS, TCP/UDP, packets, TLS, HTTP, RTT and the speed of light, what an AI API request contains, API keys, status codes (401/429), streaming |
 | 7 | `m7-web.html` | the Web vs the Internet, URLs, HTTP (methods, status codes, headers, cookies, caching), HTML/CSS/JS and the DOM, web servers (static vs dynamic, reverse proxy, app server), SSR vs CSR vs SPA vs static, APIs/JSON/REST, SSE and WebSockets vs polling, chat web-app architecture, XSS/CORS/secrets |

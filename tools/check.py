@@ -30,7 +30,8 @@ for page in sorted(root.glob("*.html")):
         elif not (root / ref).exists(): err(f"{page.name}: broken link {ref}")
 
 for f in list(root.glob("*.html")) + list(root.glob("assets/*.js")):
-    if "/home/" in f.read_text() and "/home/me/" not in f.read_text():
+    # real local paths would leak a username; the demo paths /home/me/ and /home/ada (pretend file system) are fine
+    if re.search(r"/home/(?!me/|ada)", f.read_text()):
         err(f"{f.name}: contains a local /home/ path")
 
 if not (root / "LICENSE").exists() or "Attribution 4.0 International" not in (root / "LICENSE").read_text():

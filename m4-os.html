@@ -10,7 +10,8 @@
     <li>Distinguish a program, a process and a thread.</li>
     <li>Explain time-slicing (scheduling) and why a busy machine feels laggy.</li>
     <li>Explain virtual memory, swap, and what the "OOM killer" does.</li>
-    <li>Use basic shell commands to inspect and control processes and files.</li>
+    <li>Explain how you talk to the OS: system calls (the OS API), commands, the shell, the terminal and graphical interfaces, and how they sit on top of each other.</li>
+    <li>Use basic commands (<code>ls</code>, <code>cat</code>, <code>grep</code>, pipes) to inspect files, logs and processes.</li>
     <li>Compare Linux, macOS, Windows and WSL2: what they share, where they differ, and what that means for AI work.</li>
   </ul>
 </header>
@@ -55,18 +56,101 @@
 
 <div class="callout ai"><p><b>When your local model won't start:</b> "<code>Killed</code>" with no explanation usually means the <b>OS</b> ran out of RAM and OOM-killed the process while it loaded the weights. "<code>CUDA out of memory</code>" is a different thing: the <b>GPU's</b> memory is too small and the AI library raised a normal error. The cure is the same in spirit: choose a smaller or quantised model (Module 1). Knowing <i>which</i> layer complained tells you which memory to fix.</p></div>
 
-<h2>5. Files and the shell</h2>
-<p>Almost everything on Linux is a file, in one tree starting at <code>/</code>. You'll control remote machines (cloud GPUs) through a <b>shell</b>, a text interface to the OS.</p>
+<h2>5. Talking to the OS: system calls, commands, the shell, the terminal and GUIs</h2>
+<p>So far the OS has been the manager that shares the machine. But how do <i>you</i>, or a program, actually ask it for something? There are several layers between your fingers and the hardware, and people often mix up their names (terminal, shell, command, "the console"). Once you see how they stack, the confusion disappears.</p>
+
+<h3>The stack</h3>
+<p>Everything you do ends up as the same thing: a <b>program asking the kernel for a service</b>. The kernel exposes a fixed menu of requests called <b>system calls</b> (<code>open</code>, <code>read</code>, <code>write</code>, <code>fork</code>, <code>exec</code>, <code>socket</code>…). That menu <i>is</i> the operating system's API (application programming interface, Module 7: the same idea as a web API, but between programs and the kernel). On top of it sit ordinary programs: <b>commands</b> like <code>ls</code> and <code>cat</code>, and <b>graphical applications</b> like a file manager. A <b>shell</b> lets you start commands by typing; a <b>terminal</b> is the window you type in; a <b>desktop</b> lets you start apps by clicking.</p>
+
+<div class="widget"><h4>Interactive: the layers, from you down to the hardware</h4>
+  <p class="hint">Click any layer to learn what it is. Then press a <b>Trace</b> button to follow one action down through the layers and back. Notice that the text path (left) and the graphical path (right) meet at the same system calls.</p>
+  <div class="controls" id="stk-ctl"></div>
+  <div id="stk-svg"></div>
+  <div class="callout" id="stk-panel"></div></div>
+
+<h3>Four words people mix up</h3>
+<table>
+  <tr><th>Term</th><th>What it is</th><th>Examples</th></tr>
+  <tr><td><b>Kernel &amp; system calls (the OS API)</b></td><td>The OS core and the official list of requests programs may make to it. The only door to the hardware</td><td><code>open</code>, <code>read</code>, <code>write</code>, <code>fork</code>, <code>execve</code>, <code>socket</code>, <code>chdir</code></td></tr>
+  <tr><td><b>Command (program)</b></td><td>An ordinary program file that runs as a process and usually does one small job</td><td><code>ls</code>, <code>cat</code>, <code>grep</code>, <code>python</code>, <code>git</code></td></tr>
+  <tr><td><b>Shell</b></td><td>A program that reads what you type, understands it (pipes, wildcards, variables), and starts other programs for you. Also a small scripting language</td><td>bash, zsh, fish, PowerShell, cmd.exe</td></tr>
+  <tr><td><b>Terminal (emulator)</b></td><td>The <i>window</i> that sends your key presses to the shell and draws the text that comes back. No intelligence of its own</td><td>GNOME Terminal, Windows Terminal, iTerm2, the terminal inside VS Code</td></tr>
+  <tr><td><b>GUI / desktop</b></td><td>The graphical way in: windows, icons, a pointer. Graphical applications are programs too, and they use the same system calls</td><td>The Windows desktop, macOS Finder, GNOME, KDE</td></tr>
+</table>
+<p><b>Analogy:</b> a restaurant. The <b>kitchen</b> is the kernel. The <b>order slip</b> in a fixed format is the system call. <b>Chefs who each cook one dish</b> are the commands. The <b>waiter who understands your spoken order</b> and passes it to the right chef is the shell; the <b>table where you sit and talk</b> is the terminal. A restaurant with a <b>touchscreen menu</b> is the GUI: a different way to place the same orders. <b>Where it breaks:</b> a chef can't call another chef directly in a restaurant, but commands can be wired together (below).</p>
+
+<h3>The small tools: <code>ls</code>, <code>cat</code>, <code>grep</code> and friends</h3>
+<p>Unix-style systems (Linux, macOS, WSL2) come with hundreds of small commands built on one philosophy: <b>each tool does one thing well, reads and writes plain text, and tools can be chained</b>. A few you will use constantly:</p>
+<table>
+  <tr><th>Command</th><th>What it does</th><th>Example</th></tr>
+  <tr><td><code>ls</code></td><td><b>L</b>i<b>s</b>t the files in a folder. <code>-l</code> = details (size, owner, date), <code>-h</code> = human sizes, <code>-a</code> = include hidden files</td><td><code>ls -lh models/</code></td></tr>
+  <tr><td><code>cat</code></td><td>Con<b>cat</b>enate: print the contents of one or more files (or pass text along). Good for short files</td><td><code>cat notes.txt</code></td></tr>
+  <tr><td><code>grep</code></td><td>Print only the lines that <b>match a pattern</b>. <code>-i</code> ignore case, <code>-n</code> show line numbers, <code>-c</code> count matches, <code>-v</code> invert</td><td><code>grep -n ERROR server.log</code></td></tr>
+  <tr><td><code>head</code> / <code>tail</code></td><td>First / last lines of a file. <code>tail -f</code> <i>follows</i> a growing file, such as a training log</td><td><code>tail -f train.log</code></td></tr>
+  <tr><td><code>less</code></td><td>Page through a long file (<code>q</code> to quit, <code>/word</code> to search)</td><td><code>less big.log</code></td></tr>
+  <tr><td><code>wc</code></td><td><b>W</b>ord <b>c</b>ount: <code>-l</code> counts lines</td><td><code>wc -l data.csv</code></td></tr>
+  <tr><td><code>sort</code>, <code>uniq</code>, <code>cut</code></td><td>Sort lines, remove repeats, pick columns</td><td><code>cut -d, -f2 data.csv | sort | uniq -c</code></td></tr>
+  <tr><td><code>find</code></td><td>Find files by name, size or date</td><td><code>find . -name "*.csv"</code></td></tr>
+  <tr><td><code>cd</code>, <code>pwd</code>, <code>mkdir</code></td><td>Change folder, print the current folder, make a folder</td><td><code>cd ~/projects</code></td></tr>
+  <tr><td><code>cp</code>, <code>mv</code>, <code>rm</code></td><td>Copy, move/rename, <b>delete</b>. <code>rm</code> has <b>no recycle bin</b>: deletion is permanent</td><td><code>cp a.txt b.txt</code></td></tr>
+  <tr><td><code>man</code>, <code>--help</code></td><td>Built-in manual for any command</td><td><code>man grep</code>, <code>ls --help</code></td></tr>
+</table>
+
+<h3>How commands are wired together</h3>
+<ul>
+  <li><b>Arguments and flags.</b> In <code>grep -n ERROR server.log</code>, <code>grep</code> is the command, <code>-n</code> is a <b>flag</b> (option), and <code>ERROR</code> and <code>server.log</code> are <b>arguments</b>.</li>
+  <li><b>Three standard streams.</b> Every process starts with <b>stdin</b> (input, stream 0), <b>stdout</b> (normal output, 1) and <b>stderr</b> (error messages, 2). By default stdin is your keyboard and stdout/stderr are your screen.</li>
+  <li><b>Pipes (<code>|</code>)</b> connect the stdout of one command to the stdin of the next: <code>cat server.log | grep ERROR | wc -l</code> means "take the log, keep the error lines, count them". The kernel provides the pipe (a small in-memory channel, Module 2).</li>
+  <li><b>Redirection</b> sends a stream to or from a file: <code>&gt;</code> overwrite, <code>&gt;&gt;</code> append, <code>&lt;</code> read from, <code>2&gt;&amp;1</code> merge errors into normal output. <code>python train.py &gt; log.txt 2&gt;&amp;1</code> saves everything the script prints.</li>
+  <li><b>Wildcards.</b> <code>ls *.csv</code>: the <i>shell</i> expands <code>*.csv</code> into the matching file names <b>before</b> <code>ls</code> even starts. <code>ls</code> never sees the star.</li>
+  <li><b><code>PATH</code>.</b> When you type <code>ls</code>, the shell searches the folders listed in the <code>PATH</code> variable for a program file called <code>ls</code>. That is why a freshly installed tool sometimes is "command not found": its folder is not in <code>PATH</code>.</li>
+  <li><b>Exit codes.</b> Every command ends with a number: <code>0</code> means success, anything else means failure or "nothing found". The shell stores it in <code>$?</code>, and scripts use it. (<code>grep</code> returns 1 when nothing matches.)</li>
+  <li><b>Builtins.</b> A few commands, such as <code>cd</code>, are part of the shell itself and not separate programs. They <i>have</i> to be: a child process cannot change its parent's current folder.</li>
+</ul>
+
+<div class="widget"><h4>Interactive: a tiny shell, and what the OS does underneath</h4>
+  <p class="hint">A pretend computer with a few files. Type commands or press the presets: <code>ls -l</code>, <code>cat</code>, <code>grep</code>, <code>head</code>, <code>tail</code>, <code>wc</code>, <code>sort</code>, <code>echo</code>, <code>cd</code>, <code>pwd</code>, pipes (<code>|</code>), and redirection (<code>&gt;</code>, <code>&gt;&gt;</code>). Under each result you'll see the system calls a real OS would make. Nothing here touches your real files.</p>
+  <div class="controls" id="sh-presets"></div>
+  <div class="controls"><label class="ctl"><span id="sh-prompt" class="mono"></span><input type="text" id="sh-in" style="width:340px" placeholder="try: grep ERROR data/server.log" spellcheck="false" autocomplete="off"></label>
+    <button class="primary" id="sh-run">Run</button><button id="sh-clear">Clear</button></div>
+  <div id="sh-out"></div></div>
+
+<h3>What is really happening: <code>strace</code></h3>
+<p>On Linux you can watch the system calls a command makes with <code>strace</code> (on macOS, <code>sudo dtruss</code>; on Windows, the Process Monitor tool). This is a trimmed, illustrative result for <code>cat notes.txt</code>:</p>
+<pre><code>strace -e trace=execve,openat,read,write,close cat notes.txt
+
+execve("/usr/bin/cat", ["cat", "notes.txt"], ...) = 0          # the shell started the program
+openat(AT_FDCWD, "notes.txt", O_RDONLY) = 3                    # ask the kernel for the file; get back file number 3
+read(3, "buy milk\nlearn SQL\nbuy coffee\n...", 131072) = 52   # the kernel copies 52 bytes into the program
+write(1, "buy milk\nlearn SQL\nbuy coffee\n...", 52) = 52      # print them: file number 1 is stdout
+close(3) = 0</code></pre>
+<p>So <code>cat</code> is a 5-line story: <i>open the file, read it, write it to the screen, close it</i>. <code>ls</code> asks the kernel to <i>list a directory</i> (<code>openat</code> then <code>getdents64</code>), and <code>grep</code> reads like <code>cat</code> but writes only the matching lines. Commands are thin: the kernel does the real work.</p>
+
+<h3>GUIs: the same services with a different front door</h3>
+<p>A graphical file manager looks nothing like <code>ls</code>, yet to list a folder it asks the kernel for exactly the same thing. The extra layers are about <i>input and output</i>: a <b>window system</b> turns mouse movements into "click on that icon", and graphics libraries turn the list of names into pixels (Module 1, the GPU in Module 3). Underneath, it's the same OS API. That's why it doesn't matter whether you create a folder by right-clicking or by typing <code>mkdir</code>.</p>
+<table>
+  <tr><th></th><th>Command line (terminal + shell)</th><th>Graphical interface (GUI)</th></tr>
+  <tr><td><b>Strengths</b></td><td>Fast once learned. <b>Repeatable and scriptable</b> (save the commands, run them again, share them). Combines tools with pipes. Works over a slow connection. Needs almost no resources</td><td><b>Discoverable</b> (you can see the options). Great for visual work: images, plots, drag and drop, browsing. Lower learning curve</td></tr>
+  <tr><td><b>Weaknesses</b></td><td>Not discoverable; easy to mistype; <code>rm</code> and friends have no undo; steeper learning curve</td><td>Hard to automate or reproduce ("click here, then there"); needs a screen and more resources; unusable over a plain SSH link</td></tr>
+  <tr><td><b>Typical AI uses</b></td><td>Logging into a <b>remote GPU server</b> over SSH (Module 6), running training scripts, watching logs, <code>nvidia-smi</code>, managing files, containers and Git, CI pipelines</td><td>Notebooks, dashboards, experiment trackers, image or audio viewers, annotation tools, the browser</td></tr>
+</table>
+<div class="callout ai"><p><b>Why the terminal matters for AI practitioners.</b> Cloud and lab GPU machines are usually <b>headless</b>: no screen, no desktop, only a shell reached by SSH. Every tutorial, README and error message assumes you can type commands. And <b>AI coding agents</b> (Module 13) use a shell too: the model writes a command, the program around it runs it, and the output goes back to the model. That is why permission prompts for shell commands are so important: a command can delete files just as easily as it can list them.</p></div>
+
+<h3>Everyday commands for AI work</h3>
 <pre><code>pwd                      # where am I?
 ls -lh                   # list files with sizes
 cd ~/projects            # change directory
+grep -c ERROR train.log  # how many error lines?
+tail -f train.log        # watch a log grow live (Ctrl+C to stop)
 htop                     # live view of processes, CPU, RAM (q to quit)
 ps aux | grep python     # find your Python processes
 kill 12345               # ask process 12345 to stop (kill -9 forces it)
 df -h                    # disk space      free -h   # RAM
 nvidia-smi               # GPU memory and processes
-python train.py &gt; log.txt 2&gt;&amp;1 &amp;   # run in background, save output
+python train.py &gt; log.txt 2&gt;&amp;1 &amp;   # run in the background, save all output
 nohup python train.py &amp;  # keep running after you disconnect</code></pre>
+<div class="callout"><p><b>On Windows:</b> PowerShell offers the same ideas with different names: <code>Get-ChildItem</code> (alias <code>ls</code>/<code>dir</code>) lists files, <code>Get-Content</code> (alias <code>cat</code>) prints a file, <code>Select-String</code> works like <code>grep</code>, and pipes connect them, but PowerShell passes <i>objects</i>, not just text. The easiest way to follow Unix tutorials on Windows is <b>WSL2</b> (next section), which gives you a real Linux shell. <b>Careful:</b> <code>rm -rf</code> deletes recursively with no confirmation. Check the path twice, and prefer <code>ls</code> first to see what you are about to delete.</p></div>
+
 <h2>6. Linux, macOS, Windows and WSL2: same job, different flavours</h2>
 <p><b>What they all share.</b> Every mainstream OS has a kernel, processes and threads, a scheduler, virtual memory, a file system with permissions, drivers, a shell, and a TCP/IP network stack. Everything in sections 1&ndash;5 is true on all of them, and Python behaves almost the same. The differences are in the <i>details</i> below.</p>
 <table>
@@ -102,10 +186,14 @@ nvidia-smi                # GPU visible? (works in WSL2 if the Windows NVIDIA dr
 <div class="exercise">
   <p>1) Open <code>htop</code> (or Task Manager) while running a Python loop <code>while True: pass</code>. Which number goes to ~100%? Now start 4 copies. What happens on a 4-core machine? (An AI model running flat out looks much the same: it uses every core or the whole GPU you give it.)</p>
   <p>2) In the scheduler widget find a time slice and switch cost where round robin finishes <i>later</i> on average than first-come-first-served, yet still has the best "first response" time. Why can that be a good trade for a laptop (typing in a chat window while a model runs in the background) but not for one big overnight job?</p>
-  <p>3) Run <code>uname -a</code> (and <code>cat /etc/os-release</code>) on your machine. Which OS family and kernel are you really on? If you're on Windows, run <code>wsl --list --verbose</code> in PowerShell as well and compare the two. Then predict: would <code>/mnt/c/Users</code> exist here, and why?</p>
+  <p>3) Open a terminal. Use <code>ls -l</code> to see the files in your home folder, <code>cat</code> to print a small text file, and <code>grep -n</code> to find a word in it. Then redo the same task with the graphical file manager. Which layers did you use in each case, and which did they have in common?</p>
+  <p>4) In the mini shell, count how many <code>ERROR</code> lines are in <code>data/server.log</code> in <b>three different ways</b> (hint: <code>grep -c</code>; a pipe into <code>wc -l</code>; and reading the output yourself). Then save only the error lines to <code>errors.txt</code> and print that file.</p>
+  <p>5) On Linux/WSL2, run <code>strace -e trace=openat,read,write cat notes.txt 2&gt;&amp;1 | head</code> (install <code>strace</code> if needed). Which system call opened the file? Which call printed the text to the screen?</p>
+  <p>6) A teammate says "the terminal is the shell". Correct them in two sentences using the layer diagram.</p>
+  <p>7) Run <code>uname -a</code> (and <code>cat /etc/os-release</code>) on your machine. Which OS family and kernel are you really on? If you're on Windows, run <code>wsl --list --verbose</code> in PowerShell as well and compare the two. Then predict: would <code>/mnt/c/Users</code> exist here, and why?</p>
 </div>
 <h3>Key terms</h3>
-<p><b>kernel, system call, driver, process, thread, PID, scheduler, context switch, virtual memory, page, swap, thrashing, OOM killer, shell, permissions, POSIX/Unix, WSL2, virtual machine, case sensitivity.</b></p>
+<p><b>kernel, system call, OS API, driver, process, thread, PID, scheduler, context switch, virtual memory, page, swap, thrashing, OOM killer, command, shell, terminal, GUI, window system, stdin/stdout/stderr, pipe, redirection, wildcard, PATH, exit code, builtin, ls, cat, grep, strace, permissions, POSIX/Unix, WSL2, virtual machine, case sensitivity.</b></p>
 
 <div id="quiz"></div>
 </main>
