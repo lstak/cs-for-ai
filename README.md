@@ -2,7 +2,7 @@
 
 A self-paced, interactive course on how computers work, for people who build or use AI and have no computer-science background (beginner Python is enough). Every idea comes with an interactive graphic and is tied to something you meet when building or using AI.
 
-**Live site:** `https://YOUR-USERNAME.github.io/cs-for-ai/` (replace with your own address once Pages is enabled)
+**Live site:** `https://lstak.github.io/cs-for-ai/`
 
 ## What's inside
 
@@ -22,7 +22,7 @@ The course ships with a [Claude](https://claude.ai) skill that acts as a patient
 The site is plain HTML, CSS and JavaScript: no build step, no dependencies.
 
 ```bash
-git clone https://github.com/YOUR-USERNAME/cs-for-ai.git
+git clone https://github.com/lstak/cs-for-ai.git
 cd cs-for-ai
 python3 tools/serve.py          # then open http://127.0.0.1:8000/
 ```
