@@ -1,0 +1,235 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 7 · How the Web works</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m7"><main>
+<header>
+  <p class="kicker">Module 7</p>
+  <h1>How the Web works</h1>
+  <p class="lead">Module 6 showed how computers send packets. The <b>Web</b> is the most successful service built on top of that: a few simple agreements (URLs, HTTP, HTML) that let any browser show any site. Almost every AI product you use is a web app or is reached through a web API, so this module explains the pieces: what a request looks like, what a website is made of, where pages are built, and how programs talk to each other.</p>
+  <ul class="goals">
+    <li>Explain the difference between the Internet and the Web, and read a URL.</li>
+    <li>Describe an HTTP request and response: methods, status codes, headers, cookies, caching.</li>
+    <li>Explain what HTML, CSS and JavaScript each do, and what the browser does with them.</li>
+    <li>Explain what a web server is, and compare server-side rendering, client-side rendering and single-page applications.</li>
+    <li>Explain APIs, REST and JSON, and design simple endpoints.</li>
+    <li>Explain polling, server-sent events and WebSockets, and why chat apps stream.</li>
+    <li>Describe how a chat web app talks to an AI model, and the basic security rules.</li>
+  </ul>
+</header>
+
+<h2>1. The Internet is the roads; the Web is the shops</h2>
+<p>The <b>Internet</b> (Module 6) is the global network that carries packets. The <b>Web</b> is one service that runs over it, built on three agreements:</p>
+<ul>
+  <li><b>URLs</b>: a way to <i>name</i> anything (<code>https://example.com/docs/intro</code>).</li>
+  <li><b>HTTP</b>: a way to <i>ask for it</i> and get a reply.</li>
+  <li><b>HTML</b>: a way to <i>describe pages</i> so any browser can show them, with links between them.</li>
+</ul>
+<p>Email, SSH, video calls and online games also use the Internet but aren't "the Web". A <b>browser</b> is simply a program that speaks HTTP, understands HTML, CSS and JavaScript, and draws the result on your screen.</p>
+<h3>Reading a URL</h3>
+<pre><code>https://api.example.com:443/v1/chat?lang=en&amp;limit=5#top
+└──┬──┘   └─────┬──────┘└┬┘└──┬───┘└──────┬──────┘└┬┘
+ scheme       host     port  path        query    fragment
+ (protocol)  (DNS name) (Module 6)  (which thing)  (options)  (a spot inside the page; stays in the browser)</code></pre>
+
+<h2>2. HTTP: the conversation</h2>
+<p>HTTP is a plain-text <b>request → response</b> protocol, carried over the TCP/TLS connection from Module 6. The client (browser, Python script, phone app) sends a request; the server sends exactly one response. A request has a <b>method</b> (what to do), a <b>path</b> (to what), <b>headers</b> (extra information) and sometimes a <b>body</b> (data). A response has a <b>status code</b>, headers and usually a body.</p>
+<table>
+  <tr><th>Method</th><th>Meaning</th><th>Typical use</th></tr>
+  <tr><td><code>GET</code></td><td>Read something. Must not change anything.</td><td>Load a page, fetch data</td></tr>
+  <tr><td><code>POST</code></td><td>Send data to be processed or to create something</td><td>Submit a form, send a chat message to an AI</td></tr>
+  <tr><td><code>PUT</code> / <code>PATCH</code></td><td>Replace / partly update something</td><td>Edit a record</td></tr>
+  <tr><td><code>DELETE</code></td><td>Remove something</td><td>Delete a note</td></tr>
+</table>
+<table>
+  <tr><th>Status</th><th>Family</th><th>Examples</th></tr>
+  <tr><td><code>1xx</code></td><td>Information</td><td><code>101</code> Switching Protocols (used by WebSockets, section 8)</td></tr>
+  <tr><td><code>2xx</code></td><td>Success</td><td><code>200</code> OK · <code>201</code> Created</td></tr>
+  <tr><td><code>3xx</code></td><td>Go somewhere else</td><td><code>301</code> moved permanently · <code>302</code> redirect · <code>304</code> not modified (use your cached copy)</td></tr>
+  <tr><td><code>4xx</code></td><td><b>You</b> made a mistake</td><td><code>400</code> bad request · <code>401</code> not authenticated · <code>403</code> forbidden · <code>404</code> not found · <code>429</code> too many requests</td></tr>
+  <tr><td><code>5xx</code></td><td><b>The server</b> has a problem</td><td><code>500</code> crashed · <code>502/503</code> overloaded or down · <code>504</code> timed out</td></tr>
+</table>
+<p>Two ideas make the Web work at scale:</p>
+<ul>
+  <li><b>Stateless.</b> The server treats every request on its own, remembering nothing. So how does a site know you're logged in? On login the server sends a small token in a <b>cookie</b> (<code>Set-Cookie</code> header); your browser automatically attaches it to every later request to that site (<code>Cookie</code> header). Apps that call APIs use an <code>Authorization</code> header with a key instead. (Same reason a chat app must resend the whole conversation: Module 6.)</li>
+  <li><b>Caching.</b> Headers like <code>Cache-Control: max-age=300</code> allow the browser (or a nearby <b>CDN</b>, a network of copy servers) to reuse a response instead of asking again. This is the Module 2 "keep a copy closer" idea applied to the network.</li>
+</ul>
+<p>HTTP has evolved: HTTP/1.1 (text, one request at a time per connection), HTTP/2 (many requests at once on one connection) and HTTP/3 (over UDP/QUIC to cope better with lost packets, Module 6). The ideas above stay the same.</p>
+
+<div class="widget"><h4>Interactive: the HTTP workbench</h4>
+  <p class="hint">Pick a scenario and read the raw request the client sends and the raw response the server returns. Then read "What to notice".</p>
+  <div class="controls" id="http-ctl"></div>
+  <div class="twocol">
+    <div><b>Request</b> (client → server)<div class="mono" id="http-req" style="white-space:pre-wrap;font-size:13px"></div></div>
+    <div><b>Response</b> (server → client)<div class="mono" id="http-res" style="white-space:pre-wrap;font-size:13px"></div></div>
+  </div>
+  <div class="callout" id="http-note"></div></div>
+
+<h2>3. A website: three languages, three jobs</h2>
+<p>A web page is a bundle of files in three languages. <b>Analogy:</b> a house. HTML is the <b>structure</b> (walls, rooms, doors), CSS is the <b>look</b> (paint, furniture, layout), and JavaScript is the <b>behaviour</b> (lights switching on, doors opening).</p>
+<table>
+  <tr><th></th><th>HTML</th><th>CSS</th><th>JavaScript (JS)</th></tr>
+  <tr><td><b>Job</b></td><td>What is on the page: headings, text, links, images, buttons, forms</td><td>How it looks: colours, fonts, spacing, layout, phone vs desktop</td><td>What it does: react to clicks, change the page, talk to servers</td></tr>
+  <tr><td><b>Kind of language</b></td><td>Markup: tags around content (<code>&lt;h1&gt;Hello&lt;/h1&gt;</code>), not a programming language</td><td>Rules: "every <code>h1</code> is blue"</td><td>A real programming language, like Python but different syntax; runs inside the browser</td></tr>
+  <tr><td><b>Without it</b></td><td>Nothing to show</td><td>Plain but usable page</td><td>A static page that never changes</td></tr>
+</table>
+<p>The browser <b>parses</b> the HTML into a tree of objects called the <b>DOM</b> (Document Object Model), applies the CSS rules to it, and paints pixels. JavaScript can then <i>change the tree</i> (add a chat bubble, hide a menu) and the browser redraws only what changed, with no reload. That is the whole trick behind interactive pages.</p>
+<p><b>Try it:</b> edit the three files below, then press Run. Untick CSS or JS to see what each layer contributes. (The preview is sandboxed: it can't touch your computer or this page.)</p>
+
+<div class="widget"><h4>Interactive: HTML + CSS + JavaScript</h4>
+  <div class="controls" id="web-ctl"></div>
+  <div class="twocol" id="web-edit"></div>
+  <div id="web-frame"></div></div>
+<p>Open your browser's <b>developer tools</b> (press <code>F12</code>, or right-click → Inspect) on any website. The <i>Elements</i> tab shows the DOM, <i>Network</i> shows every HTTP request, <i>Console</i> runs JavaScript. It is the best classroom there is.</p>
+
+<h2>4. Web servers</h2>
+<p>A <b>web server</b> is a program that waits on a port (443 for HTTPS, Module 6), reads each incoming HTTP request, and returns a response. Servers come in layers:</p>
+<table>
+  <tr><th>Piece</th><th>Job</th><th>Examples</th></tr>
+  <tr><td><b>Static file server</b></td><td>Hands out files as they are: HTML, CSS, JS, images</td><td>nginx, Apache, a CDN, <code>python -m http.server</code></td></tr>
+  <tr><td><b>Reverse proxy / load balancer</b></td><td>The front door: handles HTTPS (TLS), spreads requests over several app servers, caches</td><td>nginx, cloud load balancers (Module 12)</td></tr>
+  <tr><td><b>Application server</b></td><td>Runs <i>your code</i> for each request: look things up, call a database or an AI model, build a response</td><td>Python (FastAPI, Flask, Django), Node.js, Java</td></tr>
+  <tr><td><b>Database</b></td><td>Stores data durably (Module 2): users, documents, chats. See Module 8 for formats, SQL, Postgres and NoSQL</td><td>PostgreSQL, SQLite, vector databases (Module 11)</td></tr>
+</table>
+<p><b>Static</b> means the response is a ready-made file, the same for everyone. <b>Dynamic</b> means code builds the response per request. The site you are reading right now is served by <code>python -m http.server</code>, a static server in one command. A dynamic server in a few lines (this is a real, runnable FastAPI app):</p>
+<pre><code># app.py      pip install fastapi uvicorn      run:  uvicorn app:app --reload
+from fastapi import FastAPI
+app = FastAPI()
+
+@app.get("/hello")                       # GET /hello?name=Ada
+def hello(name: str = "world"):
+    return {"message": f"Hello, {name}!"}  # becomes JSON: {"message": "Hello, Ada!"}
+# open http://127.0.0.1:8000/hello?name=Ada   (and /docs for an auto-made API page)</code></pre>
+
+<h2>5. Where is the page built? SSR, CSR and SPAs</h2>
+<p>When you open a page, someone has to turn <i>data</i> (a user's notes, a list of products, a chat history) into <i>HTML</i>. There are three main choices:</p>
+<table>
+  <tr><th>Approach</th><th>Who builds the HTML?</th><th>What the browser first receives</th><th>Strengths</th><th>Weaknesses</th></tr>
+  <tr><td><b>Server-side rendering (SSR)</b></td><td>The <b>server</b>, for each request (PHP, Django, Rails, Next.js server mode)</td><td>A finished page with content</td><td>Content appears fast; works well for search engines and link previews; works even on weak phones</td><td>Server does work for every view; every click is a full round trip for a new page (unless enhanced)</td></tr>
+  <tr><td><b>Client-side rendering (CSR)</b></td><td>The <b>browser</b>, using JavaScript</td><td>An almost empty HTML shell plus a JavaScript bundle; the JS then fetches data from an API and builds the page</td><td>App-like and smooth; servers only serve files and JSON</td><td>Blank screen until JS downloads and runs; slow on weak devices; search engines and previews may see nothing</td></tr>
+  <tr><td><b>Single-page application (SPA)</b></td><td>The browser (CSR taken further)</td><td>Loads <i>once</i>; afterwards JS swaps parts of the page and only fetches small JSON, never reloading</td><td>Feels like a desktop app (Gmail, chat apps, editors)</td><td>Big first download; you must manage the URL/back button and state in JS</td></tr>
+  <tr><td><b>Static / pre-rendered</b></td><td>A <b>build step</b>, once, ahead of time</td><td>A finished page from a CDN</td><td>Fastest and cheapest; trivial to scale</td><td>Same for everyone; changes require a rebuild</td></tr>
+</table>
+<p>Modern frameworks (Next.js, Nuxt, SvelteKit) mix them: the server renders the first view, then the browser "<b>hydrates</b>" it (JS attaches behaviour to the existing HTML) and behaves like an SPA afterwards. This course site is the simplest kind: static files plus a little JavaScript.</p>
+
+<div class="widget"><h4>Interactive: how long until I see something?</h4>
+  <p class="hint">Illustrative model of three approaches. Change the network, the phone, the size of the JavaScript, and the cost of the data lookup. "First content" = the user sees real content. "Interactive" = buttons work. "Next click" = moving to another page of the same site.</p>
+  <div class="controls" id="rn-ctl"></div>
+  <div id="rn-out" class="readout"></div></div>
+
+<h2>6. APIs, JSON and REST</h2>
+<p>An <b>API</b> (application programming interface) is a menu of things one program lets other programs do. A <b>web API</b> puts that menu on the Web: instead of returning a page for humans, the server returns <b>data</b> for programs, almost always as <b>JSON</b> (JavaScript Object Notation), a simple text format of keys and values that every language can read:</p>
+<pre><code>{"id": 42, "text": "Buy milk", "done": false, "tags": ["home", "urgent"]}</code></pre>
+<p><b>REST</b> is a popular style for designing web APIs:</p>
+<ul>
+  <li><b>Resources are nouns, in the URL.</b> <code>/notes</code> is the collection, <code>/notes/42</code> is one note.</li>
+  <li><b>HTTP methods are the verbs.</b> <code>GET</code> read, <code>POST</code> create, <code>PUT/PATCH</code> update, <code>DELETE</code> remove.</li>
+  <li><b>Status codes report the result</b> (<code>201</code> created, <code>404</code> missing, <code>400</code> bad input).</li>
+  <li><b>Stateless</b> and <b>self-contained</b>: each request carries everything needed (including the key).</li>
+</ul>
+<table>
+  <tr><th>Request</th><th>Meaning</th><th>Success</th></tr>
+  <tr><td><code>GET /notes</code></td><td>List all notes</td><td><code>200</code> + list</td></tr>
+  <tr><td><code>POST /notes</code> + JSON body</td><td>Create a note</td><td><code>201</code> + the new note</td></tr>
+  <tr><td><code>GET /notes/42</code></td><td>Read note 42</td><td><code>200</code> or <code>404</code></td></tr>
+  <tr><td><code>PATCH /notes/42</code> + JSON body</td><td>Change note 42</td><td><code>200</code></td></tr>
+  <tr><td><code>DELETE /notes/42</code></td><td>Remove note 42</td><td><code>204</code> (no body) or <code>200</code></td></tr>
+</table>
+
+<div class="widget"><h4>Interactive: a tiny REST API playground</h4>
+  <p class="hint">A pretend server lives in this page. Send requests and watch the response and the data change. Writes (POST, PUT, PATCH, DELETE) need an API key: untick the box to see a <code>401</code>. Try a path that doesn't exist, a missing id, and invalid JSON.</p>
+  <div class="controls" id="rest-ctl"></div>
+  <div class="twocol">
+    <div><b>Request</b><div class="mono" id="rest-req" style="white-space:pre-wrap;font-size:13px"></div></div>
+    <div><b>Response</b> <span id="rest-pill" class="pill"></span><div class="mono" id="rest-res" style="white-space:pre-wrap;font-size:13px"></div></div>
+  </div>
+  <div class="readout"><b>The server's data right now:</b> <span class="mono" id="rest-data"></span></div></div>
+
+<div class="callout"><p><b>Not everything is strictly REST.</b> Many AI APIs are one "do this" endpoint, such as <code>POST /v1/chat</code> with a JSON body (Module 6). That is closer to a remote procedure call (RPC), but it uses the same ingredients: HTTP, JSON, an API key, status codes. Other styles you'll meet: <b>GraphQL</b> (the client asks for exactly the fields it wants through one endpoint) and <b>gRPC</b> (fast binary calls between servers). Good APIs also use <b>versions</b> (<code>/v1/</code>), <b>pagination</b> (<code>?limit=20&amp;page=2</code>) and <b>rate limits</b> (<code>429</code>).</p></div>
+
+<h2>7. Calling an API from a page or a program</h2>
+<p>Browser JavaScript uses <code>fetch</code>; Python uses <code>requests</code> (Module 6). Same request, different language:</p>
+<pre><code>// JavaScript in a web page
+const r = await fetch("/api/notes", {
+  method: "POST",
+  headers: {"Content-Type": "application/json"},
+  body: JSON.stringify({text: "Buy milk"}),
+});
+const note = await r.json();                  // {"id": 3, "text": "Buy milk"}
+document.querySelector("#list").append(note.text);   // update the DOM: no page reload</code></pre>
+<pre><code># Python
+import requests
+note = requests.post("http://127.0.0.1:8000/notes", json={"text": "Buy milk"}, timeout=10).json()</code></pre>
+
+<h2>8. Real time: polling, server-sent events and WebSockets</h2>
+<p>Plain HTTP is "client asks, server answers". The server can't speak first. For live features (chat, streaming AI replies, notifications, multiplayer, live collaboration) there are three techniques:</p>
+<table>
+  <tr><th>Technique</th><th>How it works</th><th>Good for</th></tr>
+  <tr><td><b>Polling</b></td><td>The client asks "anything new?" every N seconds</td><td>Simple, rare updates. Wasteful and delayed (the same trade-off as polling vs interrupts, Module 9)</td></tr>
+  <tr><td><b>Server-sent events (SSE)</b></td><td>The client makes one ordinary HTTP request; the server <b>keeps the response open</b> and writes pieces into it over time (<code>Content-Type: text/event-stream</code>). One direction: server → client</td><td><b>Streaming AI replies</b>, live feeds, progress bars</td></tr>
+  <tr><td><b>WebSockets</b></td><td>The client asks to <i>upgrade</i> the HTTP connection; both sides then keep a <b>two-way</b> channel open and send small messages whenever they like</td><td>Chat between users, games, collaborative editing, live voice and "realtime" AI</td></tr>
+</table>
+<pre><code>GET /chat HTTP/1.1                         ← an ordinary HTTP request that asks for an upgrade
+Host: example.com
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Key: dGhlIHNhbXBsZSBub25jZQ==
+Sec-WebSocket-Version: 13
+
+HTTP/1.1 101 Switching Protocols           ← "OK, we're no longer doing request/response"
+Upgrade: websocket
+Connection: Upgrade
+Sec-WebSocket-Accept: s3pPLMBiTxaQ9kYGzzhZRbK+xOo=
+                                           ← from here on: small two-way messages on the same TCP connection</code></pre>
+<pre><code>// JavaScript
+const ws = new WebSocket("wss://example.com/chat");     // wss = WebSocket over TLS
+ws.onmessage = (e) =&gt; console.log("server says:", e.data);
+ws.onopen    = ()  =&gt; ws.send("hello");</code></pre>
+
+<div class="widget"><h4>Interactive: polling vs push</h4>
+  <p class="hint">Six events happen on the server during 30 seconds (the dots). A polling client only learns about them at its next check. A push connection (SSE or WebSocket) hears about each event almost at once. Slide the polling interval and watch delay versus wasted requests.</p>
+  <div class="controls" id="ws-ctl"></div>
+  <svg id="ws-svg" viewBox="0 0 640 110" width="100%" role="img" aria-label="timeline of events and polls"></svg>
+  <div id="ws-bars" class="bars"></div>
+  <div class="readout" id="ws-out"></div></div>
+
+<h2>9. Putting it together: a chat web app</h2>
+<pre><code> You open https://chat.example.com
+ 1. Browser ──GET /──────────────▶ reverse proxy ─▶ static server       ← HTML shell, CSS, JS bundle   (Modules 6, 7)
+ 2. JS runs (this is an SPA) ─────GET /api/me (cookie)─▶ app server     ← "who am I?" as JSON
+ 3. You type and press Enter. JS ──POST /api/chat {"message": "..."}──▶ app server
+ 4. App server (holding the secret AI key; the browser never sees it)
+      ──POST https://api.ai-provider.example/v1/chat (stream)──▶ AI model on GPUs   (Modules 10, 12)
+ 5. Tokens stream back ◀── SSE chunks ◀── app server ◀── provider
+ 6. JS appends each chunk to the page (DOM); the browser repaints. No reload.        (Module 9: the screen)</code></pre>
+<p>Why the extra hop in step 4? Because <b>anything sent to the browser can be read by the user</b> (press F12). If the page's JavaScript held your AI provider key, anyone could copy it and run up your bill. The server keeps the secret and also enforces limits, logging and permissions.</p>
+<p>Quick ways to put an AI model behind a web page without writing HTML: <b>Gradio</b> and <b>Streamlit</b> are Python libraries that start a web server for you and generate the page.</p>
+
+<h2>10. Security basics for web apps</h2>
+<table>
+  <tr><th>Rule</th><th>Why</th></tr>
+  <tr><td><b>Use HTTPS everywhere</b></td><td>Encrypts the conversation (TLS, Module 6); otherwise cookies, keys and chats can be read on the way.</td></tr>
+  <tr><td><b>Keep secrets on the server</b></td><td>The browser is the user's territory. Never put API keys in page JavaScript or in a public repo.</td></tr>
+  <tr><td><b>Never trust input from the client</b></td><td>Anyone can send any request with <code>curl</code>, ignoring your page's buttons. Validate everything on the server, check permissions on every request.</td></tr>
+  <tr><td><b>Don't insert untrusted text as HTML</b></td><td><b>Cross-site scripting (XSS)</b>: if a page inserts text as HTML, an attacker's <code>&lt;script&gt;</code> runs in other users' browsers. Model output is untrusted text too: a manipulated model (prompt injection, Module 13) can write such code. Insert text as text (<code>element.textContent</code>), sanitise any HTML.</td></tr>
+  <tr><td><b>Protect cookies</b></td><td><code>HttpOnly</code> (JS can't read it), <code>Secure</code> (HTTPS only), <code>SameSite</code> (not sent on cross-site requests).</td></tr>
+  <tr><td><b>Understand CORS</b></td><td>A browser rule: a page from site A may only read responses from site B if B's server says so (<code>Access-Control-Allow-Origin</code>). The "CORS error" in the console is the browser protecting users; fix it on the server, not in the page.</td></tr>
+</table>
+
+<div class="exercise">
+  <p>1) Open your browser's developer tools → <i>Network</i> tab and load any news site. Find: the very first request, its status code and <code>Content-Type</code>; how many requests it made; which ones are JSON (filter "Fetch/XHR"); which responses came from the cache. What does that tell you about SSR vs CSR for that site?</p>
+  <p>2) In the HTTP workbench, find the scenario where the server tells you to slow down. Which header says how long to wait? What would a well-behaved program do?</p>
+  <p>3) In the rendering widget, set a slow phone, a slow network and a big JavaScript bundle. Which approach shows content first? Which gives the fastest <i>next click</i>? Which approach would you choose for a documentation site, and which for an email app, and why?</p>
+  <p>4) Design a REST API (URLs, methods, status codes) for a "saved chats" feature: list chats, create one, read one, rename one, delete one.</p>
+  <p>5) A teammate puts the AI provider's API key into the page's JavaScript "to keep it simple". Explain in two sentences what can go wrong and how to restructure it.</p>
+  <p>6) A chat app should show a model's reply as it is being written. Which would you choose, polling, SSE or WebSocket, and why? When would you choose a WebSocket instead?</p>
+  <p>7) Start a server with <code>python -m http.server</code> in a folder, open <code>http://127.0.0.1:8000</code> and watch each request appear in the terminal. Then run the FastAPI example and open <code>/docs</code>.</p>
+</div>
+<h3>Key terms</h3>
+<p><b>Web vs Internet, URL, HTTP, request, response, method (GET/POST/PUT/PATCH/DELETE), status code, header, body, cookie, session, cache, CDN, HTML, CSS, JavaScript, DOM, browser, web server, reverse proxy, application server, static vs dynamic, server-side rendering, client-side rendering, hydration, single-page application, API, JSON, REST, endpoint, rate limit, polling, server-sent events, WebSocket, HTTPS, XSS, CORS.</b></p>
+<h3>Where to go next</h3>
+<ul><li>Build a tiny FastAPI app with one endpoint that calls an AI model · learn basic HTML/CSS and a little JavaScript · read about authentication (OAuth, JWT) · explore a framework (Next.js, SvelteKit) once the basics feel natural · try Gradio or Streamlit to demo a model.</li></ul>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m7.js"></script>
+</body></html>

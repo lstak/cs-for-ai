@@ -1,0 +1,113 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 4 · The operating system</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m4"><main>
+<header>
+  <p class="kicker">Module 4</p>
+  <h1>The operating system</h1>
+  <p class="lead">The operating system (Linux, Windows, macOS) is the manager that sits between your programs and the hardware. It shares one machine among many programs, keeps them from trampling each other, and gives them a simple view of files, memory and devices.</p>
+  <ul class="goals">
+    <li>Distinguish a program, a process and a thread.</li>
+    <li>Explain time-slicing (scheduling) and why a busy machine feels laggy.</li>
+    <li>Explain virtual memory, swap, and what the "OOM killer" does.</li>
+    <li>Use basic shell commands to inspect and control processes and files.</li>
+    <li>Compare Linux, macOS, Windows and WSL2: what they share, where they differ, and what that means for AI work.</li>
+  </ul>
+</header>
+
+<h2>1. What the OS is for</h2>
+<ul>
+  <li><b>Share the CPU</b>: dozens of programs "run at once" on a handful of cores by taking turns very quickly (scheduling).</li>
+  <li><b>Share memory safely</b>: each program thinks it owns a private, huge block of memory (virtual memory). It can't read another program's data.</li>
+  <li><b>Provide files and devices</b>: you call <code>open()</code>; the OS talks to the SSD via a <b>driver</b>. Same for network, GPU, keyboard.</li>
+  <li><b>Enforce permissions</b>: who may read which file, who may use the GPU.</li>
+</ul>
+<p>Programs ask the OS for services through <b>system calls</b> (<code>read</code>, <code>write</code>, <code>fork</code>, <code>socket</code>…). The core of the OS that does this is the <b>kernel</b>. Everything else (the shell, the desktop) is just programs.</p>
+
+<h2>2. Programs, processes, threads</h2>
+<ul>
+  <li><b>Program</b>: a file on disk with instructions (<code>python</code>, <code>train.py</code>).</li>
+  <li><b>Process</b>: a running instance: its own memory, open files, and an id (PID). Two copies of Python running = two processes.</li>
+  <li><b>Thread</b>: a separate flow of execution <i>inside</i> a process, sharing its memory. Cheap to create, but can corrupt shared data if careless.</li>
+</ul>
+<div class="callout ai"><p><b>A local chatbot is several processes.</b> Run a chat model on your own laptop and you will find a <i>model server</i> process (it holds the 14 GB of weights), your <i>chat app</i> (a browser tab or terminal), and maybe a <i>vector database</i> for your documents. They talk to each other through the network stack on <code>localhost</code> (Module 6). Start the model server twice and you load the weights twice. Python can also start extra worker processes (rather than threads, because its "GIL" lets only one thread run Python code at a time), and each one needs its own memory.</p></div>
+
+<h2>3. Scheduling: taking turns</h2>
+<p>With 100 processes and 8 cores, the scheduler gives each process a short <b>time slice</b> (a few milliseconds) and then switches to the next. A <b>context switch</b> saves one process's state and loads another's. Switching isn't free. Short slices feel responsive, but waste time on switching.</p>
+
+<div class="widget"><h4>Interactive: the scheduler</h4>
+  <p class="hint">Three processes (A, B, C) want CPU time on a single core. Compare "first come, first served" with "round robin" and adjust the time slice and switching cost.</p>
+  <div class="controls" id="sch-ctl"></div>
+  <div class="gantt" id="sch-gantt"></div>
+  <div class="readout" id="sch-out"></div></div>
+
+<p>Notice with first-come-first-served, C has to wait for A and B to fully finish before it even <i>starts</i>. Round robin lets everyone start early (good for interactive use) at the price of extra switches. Real schedulers are cleverer, but this trade-off is the heart of it.</p>
+
+<h2>4. Virtual memory, swap and the OOM killer</h2>
+<p>Each process sees its own <b>virtual</b> address space; the OS and hardware map it to real RAM in 4 KB <b>pages</b>. Benefits: isolation, and the ability to pretend there's more memory than there is. When RAM runs short, the OS can push rarely-used pages to disk (<b>swap</b>), which is ~1000× slower than RAM, so the machine suddenly crawls ("thrashing"). If swap also fills, the kernel's <b>OOM killer</b> picks a process (usually the biggest) and terminates it. You just see <code>Killed</code> in the terminal.</p>
+
+<div class="widget"><h4>Interactive: fill up the RAM</h4>
+  <p class="hint">Machine: 16 GB RAM + 8 GB swap. Launch programs and watch the system state. Click a segment to close that program.</p>
+  <div class="controls" id="mem-ctl"></div>
+  <div class="memory" id="mem-bar"></div>
+  <div><span id="mem-state" class="pill"></span> <span id="mem-txt"></span></div>
+  <div class="log" id="mem-log"></div></div>
+
+<div class="callout ai"><p><b>When your local model won't start:</b> "<code>Killed</code>" with no explanation usually means the <b>OS</b> ran out of RAM and OOM-killed the process while it loaded the weights. "<code>CUDA out of memory</code>" is a different thing: the <b>GPU's</b> memory is too small and the AI library raised a normal error. The cure is the same in spirit: choose a smaller or quantised model (Module 1). Knowing <i>which</i> layer complained tells you which memory to fix.</p></div>
+
+<h2>5. Files and the shell</h2>
+<p>Almost everything on Linux is a file, in one tree starting at <code>/</code>. You'll control remote machines (cloud GPUs) through a <b>shell</b>, a text interface to the OS.</p>
+<pre><code>pwd                      # where am I?
+ls -lh                   # list files with sizes
+cd ~/projects            # change directory
+htop                     # live view of processes, CPU, RAM (q to quit)
+ps aux | grep python     # find your Python processes
+kill 12345               # ask process 12345 to stop (kill -9 forces it)
+df -h                    # disk space      free -h   # RAM
+nvidia-smi               # GPU memory and processes
+python train.py &gt; log.txt 2&gt;&amp;1 &amp;   # run in background, save output
+nohup python train.py &amp;  # keep running after you disconnect</code></pre>
+<h2>6. Linux, macOS, Windows and WSL2: same job, different flavours</h2>
+<p><b>What they all share.</b> Every mainstream OS has a kernel, processes and threads, a scheduler, virtual memory, a file system with permissions, drivers, a shell, and a TCP/IP network stack. Everything in sections 1&ndash;5 is true on all of them, and Python behaves almost the same. The differences are in the <i>details</i> below.</p>
+<table>
+  <tr><th></th><th>Linux</th><th>macOS</th><th>Windows</th><th>WSL2 (inside Windows)</th></tr>
+  <tr><td><b>Kernel</b></td><td>Linux</td><td>XNU ("Darwin"), a Unix family kernel</td><td>Windows NT</td><td>A real Linux kernel, run in a lightweight virtual machine managed by Windows</td></tr>
+  <tr><td><b>Typical role</b></td><td>Servers, cloud, GPU clusters; where most AI training and deployment happens</td><td>Developer laptops; Apple-silicon Macs</td><td>Desktops, laptops, gaming, offices; many NVIDIA GPU PCs</td><td>A Linux workspace on a Windows PC</td></tr>
+  <tr><td><b>Shell</b></td><td>bash (usually)</td><td>zsh (Unix-style)</td><td>PowerShell / cmd (different syntax)</td><td>bash, same as Linux</td></tr>
+  <tr><td><b>Paths</b></td><td><code>/home/me/data</code></td><td><code>/Users/me/data</code></td><td><code>C:\Users\me\data</code></td><td><code>/home/me/data</code>; Windows drives appear as <code>/mnt/c/...</code></td></tr>
+  <tr><td><b>Installing software</b></td><td><code>apt</code>, <code>dnf</code>, &hellip;</td><td>App Store, Homebrew (add-on)</td><td>Installers, <code>winget</code></td><td><code>apt</code> etc., like Linux</td></tr>
+  <tr><td><b>GPU for AI</b></td><td>NVIDIA CUDA (also AMD ROCm)</td><td>No NVIDIA CUDA. Apple's own GPU via Metal (PyTorch device <code>"mps"</code>). CPU and GPU <i>share</i> one pool of memory</td><td>NVIDIA CUDA</td><td>NVIDIA CUDA, using the GPU through the <i>Windows</i> driver (don't install a separate Linux GPU driver inside)</td></tr>
+</table>
+<h3>How the families relate</h3>
+<ul>
+  <li><b>macOS and Linux are cousins.</b> Both follow Unix conventions (POSIX): similar commands (<code>ls</code>, <code>cd</code>, <code>grep</code>, <code>ssh</code>), the same <code>/</code>-separated paths, and the same permission model. Most tutorials for one work on the other.</li>
+  <li><b>Windows is a different lineage.</b> Different kernel, backslash paths with drive letters, a different shell, and different ways of starting processes. Old Windows scripts and Linux scripts rarely run unchanged.</li>
+  <li><b>WSL2 is the bridge.</b> It is not an emulator: Windows runs a genuine Linux kernel in a small, fast virtual machine, so inside WSL2 you really are on Linux. This is a common way to get a Linux workflow on a Windows laptop with GPU support.</li>
+  <li><b>Containers (Docker) are Linux technology.</b> On macOS and Windows, Docker quietly starts a Linux VM underneath. That's another reason "develop anywhere, but deploy on Linux" is the usual advice.</li>
+</ul>
+<h3>Practical gotchas for AI work</h3>
+<ul>
+  <li><b>Where you keep files in WSL2 matters.</b> Your project in the Linux home (<code>~/project</code>) is fast. The same project under <code>/mnt/c/...</code> has to cross between two file systems and can be many times slower (Module 2: many small reads across a file-system boundary are slow).</li>
+  <li><b>Case sensitivity.</b> Linux treats <code>Data.csv</code> and <code>data.csv</code> as different files; Windows and macOS (by default) treat them as the same. Code that works on your laptop can fail on a Linux server.</li>
+  <li><b>Line endings.</b> Windows text files often end lines with two characters (CRLF), Linux with one (LF). A shell script saved with Windows endings can fail on Linux with confusing errors.</li>
+  <li><b>Worker processes.</b> Windows and macOS start new Python processes from scratch ("spawn"); Linux has traditionally used the cheaper "fork" (the default is shifting in newer Python versions). Practical effect: for <code>DataLoader(num_workers&gt;0)</code> or <code>multiprocessing</code>, put your main code under <code>if __name__ == "__main__":</code> or Windows/macOS may crash or recursively start workers.</li>
+  <li><b>Paths in code.</b> Use <code>pathlib.Path("data") / "train.csv"</code> instead of gluing strings with <code>/</code> or <code>\</code>.</li>
+</ul>
+<pre><code>uname -a                  # Linux/macOS/WSL2: which kernel am I on? (WSL2 shows "microsoft" and "WSL2")
+cat /etc/os-release       # which Linux distribution (Ubuntu, Debian, ...)
+wsl --list --verbose      # run in Windows PowerShell: which WSL version does each distro use?
+nvidia-smi                # GPU visible? (works in WSL2 if the Windows NVIDIA driver is installed)</code></pre>
+<div class="callout ai"><p><b>Rule of thumb:</b> prototype wherever you're comfortable (Windows, macOS, WSL2), but expect the servers that host AI models, and cloud machines (Module 12), to run Linux, so avoid OS-specific habits in your code and test there early.</p></div>
+
+<div class="exercise">
+  <p>1) Open <code>htop</code> (or Task Manager) while running a Python loop <code>while True: pass</code>. Which number goes to ~100%? Now start 4 copies. What happens on a 4-core machine? (An AI model running flat out looks much the same: it uses every core or the whole GPU you give it.)</p>
+  <p>2) In the scheduler widget find a time slice and switch cost where round robin finishes <i>later</i> on average than first-come-first-served, yet still has the best "first response" time. Why can that be a good trade for a laptop (typing in a chat window while a model runs in the background) but not for one big overnight job?</p>
+  <p>3) Run <code>uname -a</code> (and <code>cat /etc/os-release</code>) on your machine. Which OS family and kernel are you really on? If you're on Windows, run <code>wsl --list --verbose</code> in PowerShell as well and compare the two. Then predict: would <code>/mnt/c/Users</code> exist here, and why?</p>
+</div>
+<h3>Key terms</h3>
+<p><b>kernel, system call, driver, process, thread, PID, scheduler, context switch, virtual memory, page, swap, thrashing, OOM killer, shell, permissions, POSIX/Unix, WSL2, virtual machine, case sensitivity.</b></p>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m4.js"></script>
+</body></html>

@@ -1,0 +1,16 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.pyc
+
+# Local-only Claude Code settings (never publish)
+.claude/settings.local.json
+
+# Logs and scratch files
+*.log
+node_modules/

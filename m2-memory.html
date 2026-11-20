@@ -1,0 +1,81 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 2 · Memory & storage</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m2"><main>
+<header>
+  <p class="kicker">Module 2</p>
+  <h1>Memory & storage</h1>
+  <p class="lead">A computer is not one pool of memory but a pyramid: tiny and blazing fast at the top, huge and slow at the bottom. Where a piece of data lives (a model's weights, your documents, a chat history) decides how quickly an AI system can use it.</p>
+  <ul class="goals">
+    <li>Name the levels of the memory hierarchy and their rough speed and size.</li>
+    <li>Explain why a chatbot model has to be <i>loaded</i> into GPU memory before it can answer anything.</li>
+    <li>Estimate how long it takes to load a model or a document collection from disk, network or RAM.</li>
+    <li>Explain latency vs bandwidth, and why a "cache" makes repeated work fast.</li>
+  </ul>
+</header>
+
+<h2>1. The workshop analogy</h2>
+<p>Imagine a carpenter (the CPU). Tools in her <b>hands</b> are instant (registers). Tools on the <b>workbench</b> take a second (cache). Tools in the <b>garage</b> take a minute (RAM). Tools in the <b>warehouse across town</b> take hours (SSD/disk). Tools ordered from <b>another country</b> take weeks (network). A good carpenter keeps what she needs close and fetches in batches. A computer does the same. A chatbot is the same story: the model's weights are the carpenter's tools, and they must be fetched from the warehouse (disk) to the workbench (GPU memory) before work can start.</p>
+
+<table>
+  <tr><th>Level</th><th>Typical size</th><th>Latency</th><th>Notes</th></tr>
+  <tr><td>Registers</td><td>~1 KB</td><td>0.3 ns</td><td>Inside the CPU core</td></tr>
+  <tr><td>Cache (L1→L3)</td><td>32 KB → 32 MB</td><td>1–15 ns</td><td>Automatic; moves data in 64-byte "lines"</td></tr>
+  <tr><td>RAM (main memory)</td><td>16–512 GB</td><td>~100 ns</td><td>Lost when power is off (volatile)</td></tr>
+  <tr><td>SSD (NVMe)</td><td>0.5–8 TB</td><td>~100 µs</td><td>Persistent. 1000× slower than RAM to start</td></tr>
+  <tr><td>Hard disk</td><td>1–20 TB</td><td>~10 ms</td><td>Spinning platter; terrible for random access</td></tr>
+  <tr><td>Network</td><td>unlimited</td><td>0.5–150 ms</td><td>Depends on distance (Module 6)</td></tr>
+</table>
+
+<div class="widget"><h4>Interactive: scale the latencies to human time</h4>
+  <p class="hint">Bars use a logarithmic axis (each gridline is 10× more). Switch on "human scale" to pretend one CPU nanosecond lasts one second.</p>
+  <div class="controls"><label><input type="checkbox" id="human"> Human scale (1 ns → 1 s)</label></div>
+  <div id="w-lat" class="bars"></div></div>
+
+<h2>2. Latency vs bandwidth</h2>
+<p><b>Latency</b> is how long until the <i>first</i> byte arrives. <b>Bandwidth</b> is how many bytes per second flow once it starts. A cargo ship has huge bandwidth and terrible latency; a motorbike courier the opposite. Reading one tiny file from a network drive is latency-bound; copying a huge file is bandwidth-bound. Many small reads are the worst case: opening 100,000 tiny text files is far slower than reading one big file of the same total size.</p>
+
+<div class="widget"><h4>Interactive: how long to load a model (or a pile of documents)?</h4>
+  <p class="hint">Time = size ÷ bandwidth. Set the size to 14 GB (a 7B chat model in fp16, Module 1) and see how long the first answer is delayed by loading alone. (Typical sustained speeds.)</p>
+  <div class="controls" id="xfer-ctl"></div>
+  <div id="w-xfer" class="bars"></div></div>
+
+<h2>3. Caches and why access order matters</h2>
+<p>When the CPU reads one number from RAM, the hardware grabs the whole surrounding 64-byte <b>cache line</b> (e.g. 8 neighbouring doubles), betting that you'll want the neighbours next. If you walk through memory in order, 7 of every 8 reads are cache <i>hits</i>. If you jump around, nearly every read is a slow <i>miss</i>. 2D arrays are stored row after row, so walking along a row is sequential and walking down a column is a series of jumps.</p>
+
+<div class="widget"><h4>Interactive: row order vs column order</h4>
+  <p class="hint">A 16×16 array in memory (row after row). Our tiny cache holds just 4 lines of 8 numbers. Green = hit, red = miss.</p>
+  <div class="controls"><button class="primary" id="run-row">Walk along rows</button><button class="primary" id="run-col">Walk down columns</button>
+    <span id="cache-stat" class="stat"></span></div>
+  <div class="cachegrid" id="w-cache"></div></div>
+
+<div class="callout ai"><p><b>"Cache" is a general idea.</b> Keep a copy of something you'll need again somewhere closer and faster. AI services do this everywhere: a model stays loaded in GPU memory between requests instead of reloading; a chat service keeps the already-processed start of your conversation so it doesn't redo it for every message ("prompt caching"); a search feature keeps hot document embeddings in RAM. All of them trade scarce fast memory for time.</p></div>
+
+<h2>4. GPU memory is a separate pyramid</h2>
+<p>A GPU has its own memory (<b>VRAM</b> or <b>HBM</b>), physically separate from the computer's RAM. Running a model means: (1) the weights sit in a file on disk, (2) they are read into RAM, (3) they are copied across a bus (PCIe, Module 9) into VRAM. Only then can the GPU start answering. That is why a local chatbot takes many seconds to start, why the first request to a cold server is slow, and why a bigger model needs a GPU with more VRAM (typically 8–80 GB). If the model plus the conversation doesn't fit you get an error such as <code>CUDA out of memory</code>, no matter how much RAM or disk you have. More in Modules 3 and 10.</p>
+
+<pre><code># Peek at the hierarchy on your own machine (Linux/macOS terminal)
+lscpu | grep -i cache      # cache sizes (Linux)
+free -h                    # RAM
+df -h                      # disk space
+nvidia-smi                 # GPU + VRAM (NVIDIA)</code></pre>
+
+<pre><code># Python: see access order matter. Run it!
+import numpy as np, time
+a = np.random.rand(4000, 4000)
+t = time.time(); a.sum(axis=1); print("row sums   ", time.time() - t)
+t = time.time(); a.sum(axis=0); print("column sums", time.time() - t)
+# also try: b = a.T.copy() vs a.T (a view); then time b.sum(axis=1)</code></pre>
+
+<div class="exercise">
+  <p>1) Using the transfer widget, how long does it take to load a 14 GB model from a hard disk vs NVMe vs a 1 Gbit network share? What changes if it is already in RAM? And a 140 GB model?</p>
+  <p>2) A "chat with your documents" app (RAG, Module 11) searches 2 million small text chunks. Should the search index live on a network drive, local SSD or in RAM? Use latency vs bandwidth to justify it.</p>
+  <p>3) A phone can run a small chat model but not a large one. List which levels of the memory pyramid limit it and why.</p>
+</div>
+<h3>Key terms</h3>
+<p><b>register, cache, cache line, RAM, VRAM/HBM, SSD, latency, bandwidth, cache hit/miss, contiguous memory, loading a model, prompt caching.</b></p>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m2.js"></script>
+</body></html>

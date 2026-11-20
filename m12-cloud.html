@@ -1,0 +1,91 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 12 · The cloud</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m12"><main>
+<header>
+  <p class="kicker">Module 12</p>
+  <h1>The cloud</h1>
+  <p class="lead">"The cloud" is not a place or a mystery. It is other people's computers in big data centres, rented by the hour (or by the request) through a web interface or API. Almost every AI product you use runs there. This module shows what you can rent, how it connects to everything you've learned, and how to avoid a surprise bill.</p>
+  <ul class="goals">
+    <li>Explain what cloud computing is and the main building blocks (compute, storage, network, managed services).</li>
+    <li>Choose between renting a GPU machine and calling a hosted model API, with a back-of-envelope cost.</li>
+    <li>Explain regions, availability zones, and why location matters (latency, law, price).</li>
+    <li>Recognise the usual traps: idle GPUs, data-transfer fees, leaked keys.</li>
+  </ul>
+</header>
+
+<h2>1. What "the cloud" actually is</h2>
+<p><b>Analogy:</b> electricity. You don't run your own power station; you plug in and pay for what you use. Cloud providers (Amazon Web Services, Microsoft Azure, Google Cloud, and others) run enormous data centres full of servers and let you rent slices of them in seconds.</p>
+<p><b>Where the analogy breaks:</b> electricity is the same everywhere. Cloud resources differ by region, by hardware type and by availability. Good GPUs are often <i>scarce</i> and you may have to request a quota or wait.</p>
+<p>Under the hood it is still everything from Modules 1–10: a rented "virtual machine" is a <b>Linux</b> (or Windows) computer (Module 4) with a CPU, RAM, maybe a GPU (Modules 2–3), that you reach over the <b>network</b> (Module 6), typically through <code>ssh</code>.</p>
+
+<h2>2. The building blocks</h2>
+<table>
+  <tr><th>Block</th><th>What it is</th><th>Everyday analogy</th><th>AI example</th></tr>
+  <tr><td><b>Virtual machine (VM) / instance</b></td><td>A rented computer, shared safely on bigger hardware by a <i>hypervisor</i>. You choose CPU, RAM, and optionally GPUs.</td><td>Renting a furnished flat</td><td>A GPU instance to fine-tune a model</td></tr>
+  <tr><td><b>Object storage</b></td><td>Cheap, huge, durable storage of files ("objects") in <i>buckets</i>, accessed over HTTP, not like a normal disk.</td><td>A warehouse with a ticket system</td><td>Datasets (as Parquet or JSON Lines, Module 8), model checkpoints</td></tr>
+  <tr><td><b>Block / local disk</b></td><td>A virtual disk attached to a VM; faster than object storage, tied to that VM.</td><td>The flat's cupboard</td><td>Fast scratch space for training</td></tr>
+  <tr><td><b>Network (VPC), load balancer</b></td><td>A private network around your machines, and a front door that spreads requests over many servers.</td><td>Your building's walls and reception</td><td>Putting a model behind a public URL</td></tr>
+  <tr><td><b>Containers &amp; Kubernetes</b></td><td>A container packages your code and libraries (Module 5) so it runs the same everywhere. Kubernetes starts, stops and scales many containers.</td><td>Shipping containers and the port that moves them</td><td>Running 20 copies of a model server</td></tr>
+  <tr><td><b>Serverless</b></td><td>You give code or a request; the provider runs it and bills per use. No machine to manage.</td><td>Taxi instead of owning a car</td><td>A function that runs when a file is uploaded</td></tr>
+  <tr><td><b>Managed AI services / model APIs</b></td><td>The provider runs the model; you send text and get text back, paying per token.</td><td>Eating out instead of cooking</td><td>Calling a hosted LLM from your app</td></tr>
+</table>
+
+<h2>3. Regions, zones and why location matters</h2>
+<ul>
+  <li><b>Region</b>: a geographic area with several data centres (e.g. "Frankfurt", "Virginia").</li>
+  <li><b>Availability zone</b>: one data centre (or group) inside a region; spread over zones so one fire or power cut doesn't take you offline.</li>
+</ul>
+<p>Choose a region for: <b>latency</b> (Module 6: light needs ~1 ms per 200 km each way, so Amsterdam to Virginia (about 6,200 km) is at least ~60 ms round trip, and typically 75–90 ms in practice), <b>law</b> (some data must stay in the EU), <b>price</b> (varies by region) and <b>GPU availability</b>.</p>
+
+<h2>4. Rent a GPU, or call an API?</h2>
+<p>You have two broad options for using an AI model in a product:</p>
+<ul>
+  <li><b>Call a hosted model API.</b> Zero setup, pay per token, always the latest model, no idle cost. You depend on a provider and send them your data.</li>
+  <li><b>Self-host an open model on a rented GPU.</b> You pay per <i>hour</i> whether or not anyone is using it, and you handle scaling, updates and monitoring. Can win at high, steady volume or when data may not leave your control.</li>
+</ul>
+
+<div class="widget"><h4>Interactive: API vs. your own GPU (illustrative numbers)</h4>
+  <p class="hint">Prices and speeds below are <b>made-up round numbers</b> for learning. Check current price lists before deciding. Move the sliders and find where the lines cross. Notice what the <i>peak-to-average ratio</i> does to the self-hosting bill.</p>
+  <div class="controls" id="cl-ctl"></div>
+  <div class="bars" id="cl-bars"></div>
+  <div class="readout" id="cl-out"></div></div>
+
+<div class="callout ai"><p><b>Key idea:</b> an API bills for <i>work done</i>; a rented GPU bills for <i>time reserved</i>. At low or spiky volume, API usually wins because you aren't paying for idle hardware. At high steady volume the GPU can win, <b>if</b> you keep it busy. This "utilisation" idea (how busy the expensive hardware is kept) is what the capstone's timeline hints at, now measured in dollars.</p></div>
+
+<h2>5. Common traps</h2>
+<table>
+  <tr><th>Trap</th><th>What happens</th><th>Habit that prevents it</th></tr>
+  <tr><td>Forgotten GPU instance</td><td>A GPU left running over a weekend can cost hundreds of dollars.</td><td>Stop/terminate when done; set budget alerts and auto-shutdown.</td></tr>
+  <tr><td>Data-transfer ("egress") fees</td><td>Moving data <i>out</i> of the cloud (or between regions) is billed per GB.</td><td>Keep data and compute in the same region.</td></tr>
+  <tr><td>Leaked secret keys</td><td>API keys or cloud credentials pushed to a public repo get found by bots within minutes and abused.</td><td>Never commit keys; use environment variables or a secrets manager; give each key the minimum permissions.</td></tr>
+  <tr><td>Spot / preemptible instances</td><td>Much cheaper GPUs that the provider can take back on short notice.</td><td>Save checkpoints often so a job can resume.</td></tr>
+  <tr><td>Quotas &amp; availability</td><td>"No GPUs available in this region" or a quota of zero for new accounts.</td><td>Request quota early; try another region or GPU type.</td></tr>
+</table>
+
+<h3>Who is responsible for what?</h3>
+<p>The provider secures the building and hardware; <b>you</b> secure what you put in it: who may log in, which ports are open (Module 6), whether the storage bucket is accidentally public. This is called the <b>shared responsibility model</b>.</p>
+
+<h2>6. Cloud in one connected picture</h2>
+<pre><code>Your laptop ──HTTPS──▶ load balancer ──▶ container (model server) on a GPU VM
+                                          │         ▲
+                                          ▼         │
+                                 object storage   fast local disk
+                                 (datasets,       (scratch,
+                                  checkpoints)     cached weights)</code></pre>
+<p>Every arrow is something you've met: a network hop (Module 6), a storage tier (Module 2), a process in an OS (Module 4), packaged software (Module 5).</p>
+
+<div class="exercise">
+  <p>1) Your app makes 2,000 requests/day, each ≈ 1,500 tokens. In the widget, which is cheaper? Increase requests/day until the winner flips. At what volume does it happen, and what would you want to know about your <i>peak</i> traffic first?</p>
+  <p>2) A 70B-parameter model in fp16 needs about 140 GB for weights (Module 1). On 80 GB GPUs, how many do you need at minimum, ignoring the memory for conversations? What would 4-bit quantisation (0.5 byte per parameter) change?</p>
+  <p>3) Your dataset is 2 TB in a US region but your GPU is in Europe. Name two costs or problems (hint: Module 6 and "egress").</p>
+</div>
+<h3>Key terms</h3>
+<p><b>cloud provider, region, availability zone, virtual machine, hypervisor, instance, GPU instance, object storage, bucket, VPC, load balancer, container, Kubernetes, serverless, managed service, spot instance, quota, egress, shared responsibility, utilisation.</b></p>
+<h3>Where to go next</h3>
+<ul><li>Pick one provider and complete its "launch a VM and SSH in" tutorial · Docker basics · infrastructure as code (Terraform) · monitoring and cost dashboards · model-serving tools (vLLM, Triton).</li></ul>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m12.js"></script>
+</body></html>

@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 9 · Peripherals & I/O</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m9"><main>
+<header>
+  <p class="kicker">Module 9</p>
+  <h1>Peripherals & I/O</h1>
+  <p class="lead">A CPU on its own can only compute. Keyboards, cameras, microphones, speakers, displays and network cards are how a computer perceives and acts, and so they are the <i>senses and hands</i> of every AI system: a voice assistant listens through a microphone, a photo app sees through a camera, a robot acts through motors.</p>
+  <ul class="goals">
+    <li>Explain buses, controllers, drivers and how a device talks to the CPU.</li>
+    <li>Compare polling and interrupts, and explain DMA.</li>
+    <li>Describe how a voice assistant or camera-based AI turns real-world signals into a model's input and back into action.</li>
+    <li>Check whether an interface can carry the data rate of a sensor (e.g. a camera) before you buy or design.</li>
+  </ul>
+</header>
+
+<h2>1. The motherboard as a city map</h2>
+<p>Components are joined by <b>buses</b>, shared data highways with different speeds and purposes:</p>
+<ul>
+  <li><b>Memory bus</b>: CPU ↔ RAM. Very fast.</li>
+  <li><b>PCIe</b>: the high-speed expansion bus. GPUs, NVMe SSDs and fast network cards plug in here. Measured in "lanes" (×4, ×16); more lanes, more bandwidth.</li>
+  <li><b>USB</b>: the universal connector for keyboards, webcams, drives, microphones, microcontrollers. Versions differ hugely in speed.</li>
+  <li><b>SATA / NVMe</b>: storage links. NVMe (over PCIe) is much faster than SATA.</li>
+  <li><b>Ethernet / Wi-Fi</b>: network (Module 6).</li>
+  <li><b>I²C, SPI, UART, GPIO, MIPI-CSI</b>: simple links used by sensors and cameras on embedded boards (Raspberry Pi, Jetson, microcontrollers).</li>
+</ul>
+<p>Each device has a <b>controller</b> (a small chip speaking its protocol) and the OS has a <b>driver</b> (software that knows how to talk to that controller and presents a uniform interface, e.g. "a camera", "a disk").</p>
+
+<h2>2. How does the CPU know something happened?</h2>
+<p>You press a key. How does the program find out? Two strategies:</p>
+<ul>
+  <li><b>Polling</b>: the CPU keeps asking "anything yet?" at intervals. Simple, but wastes effort when nothing is happening, and reacts late if the interval is long.</li>
+  <li><b>Interrupts</b>: the device sends an electrical signal. The CPU pauses what it is doing, runs a short <b>handler</b>, and goes back. Reaction is immediate and idle time costs nothing.</li>
+</ul>
+
+<div class="widget"><h4>Interactive: polling vs interrupts</h4>
+  <p class="hint">Each tick mark on the timeline is a unit of time. Stars are events (keystrokes, sensor readings). Slide the polling interval and compare how late events are handled and how many checks were wasted.</p>
+  <div class="controls" id="int-ctl"></div>
+  <svg id="int-svg" viewBox="0 0 640 170" width="100%" role="img" aria-label="polling versus interrupts timeline"></svg>
+  <div class="twocol"><div class="readout" id="poll-out"></div><div class="readout" id="irq-out"></div></div></div>
+
+<h3>DMA: don't make the CPU carry the boxes</h3>
+<p>Copying a 4 MB camera frame into memory one byte at a time would keep the CPU busy full-time. <b>Direct Memory Access (DMA)</b> lets a device (or controller) write straight into RAM by itself and interrupt the CPU only once at the end. The same idea lets GPUs and network cards move large buffers without the CPU. Your GPU uses DMA to receive the model's weights and your inputs from RAM, and a network card uses it to deliver an incoming reply into memory.</p>
+
+<h2>3. Can the wire keep up?</h2>
+<p>Every interface has a maximum <b>throughput</b>. A sensor produces a data stream at a rate you can compute: pixels × bytes per pixel × frames per second × number of cameras. If the stream is more than the interface can carry, frames are dropped or compressed (and compression costs CPU/GPU time and can hurt your model's accuracy).</p>
+
+<div class="widget"><h4>Interactive: camera bandwidth check</h4>
+  <p class="hint">Configure raw (uncompressed) cameras and see which interfaces can sustain the stream.</p>
+  <div class="controls" id="bw-ctl"></div>
+  <div class="readout" id="bw-need"></div>
+  <div class="bars" id="bw-bars"></div></div>
+
+<div class="callout ai"><p><b>Edge AI</b> means running the model right next to the sensor (a phone, a doorbell camera, a car, a drone) instead of sending everything to the cloud. It is an I/O decision as much as a compute one: raw video may be too much to upload (see the widget), the reply may need to arrive in tens of milliseconds, and some data (a baby monitor, a medical device) shouldn't leave the building at all. The usual compromise is to run a small model locally and call a bigger one in the cloud only when needed.</p></div>
+
+<h2>4. Case study: a voice assistant</h2>
+<p>Saying "what's the weather tomorrow?" to a smart speaker chains almost every idea in this course:</p>
+<ol>
+  <li><b>Microphone</b> samples the air pressure 16,000 times a second (Module 1): 16,000 samples × 2 bytes = <b>32 KB/s</b>, tiny compared with a camera. A small always-on model listens for the <b>wake word</b>; nothing is sent anywhere before it hears it.</li>
+  <li><b>Speech-to-text</b> model turns the audio numbers into text (on the device or in the cloud, Module 12).</li>
+  <li>A <b>language model</b> (Module 11) decides what to do. It may request a <b>tool</b>, such as a weather lookup (Module 13) over the network (Module 6).</li>
+  <li><b>Text-to-speech</b> model turns the reply text back into audio samples.</li>
+  <li>The <b>speaker</b> (a peripheral again) plays them, ideally starting before the whole reply is generated (streaming).</li>
+</ol>
+<p>Each stage adds a delay, and the stages run one after the other, so a pause of 1&ndash;2 seconds is common. Designers shorten it by streaming between stages, running small models on the device, and keeping a persistent connection to the cloud (Module 6). It is the same <b>pipeline thinking</b> (what happens, in which order, at what cost) that you'll apply in the capstone.</p>
+
+<h2>5. Everyday peripherals in AI work</h2>
+
+
+<table>
+  <tr><th>Device</th><th>Why you'd care</th></tr>
+  <tr><td>Camera</td><td>Feeds vision models (object detection, face unlock, document reading). Frame rate, resolution and bandwidth decide what is possible; compressed vs raw video</td></tr>
+  <tr><td>Microphone &amp; speaker</td><td>Voice assistants, transcription, translation. Sample rate (16 kHz for speech) × bit depth × channels = a tiny data rate</td></tr>
+  <tr><td>Keyboard / touch / screen</td><td>How prompts get in and replies get shown (the screen is also how a model can <i>see</i> your desktop: screenshots, Module 13)</td></tr>
+  <tr><td>LiDAR / IMU / GPS</td><td>Self-driving cars, robots and drones; timestamps and synchronising several sensors</td></tr>
+  <tr><td>Motors / actuators</td><td>How a robot's model <i>acts</i>; commands must arrive on a deadline</td></tr>
+  <tr><td>Storage</td><td>Where models and documents live (Module 2)</td></tr>
+  <tr><td>Power &amp; cooling</td><td>GPUs and phones slow down (throttle) when hot, which is why a long local-AI session can get slower</td></tr>
+</table>
+<pre><code># See what hardware the OS found (Linux)
+lsusb          # USB devices
+lspci          # PCIe devices (GPU, NVMe, NIC)
+lsblk          # disks
+v4l2-ctl --list-devices     # cameras
+nvidia-smi -q -d TEMPERATURE,CLOCK | head -30</code></pre>
+<pre><code># Python: grab 100 webcam frames and measure the real frame rate (needs opencv-python)
+import cv2, time
+cap = cv2.VideoCapture(0); t = time.time()
+for _ in range(100): ok, frame = cap.read()
+print(f"{100/(time.time()-t):.1f} fps, frame shape {frame.shape}, {frame.nbytes/1e6:.1f} MB per frame")</code></pre>
+
+<div class="exercise">
+  <p>1) In the polling widget, find a polling interval where the average delay is worse than 3 ticks. How would increasing polling frequency change the wasted-checks count, and why do interrupts avoid the trade-off?</p>
+  <p>2) A smart doorbell has a 1080p camera. It could stream raw video at 30 fps over home Wi-Fi (assume 20 MB/s usable). Does it fit? What would a designer do: compress, lower the frame rate, or run a person-detection model <i>on the doorbell</i> and upload only short clips? Compare privacy and cost, too.</p>
+  <p>3) One hour of 16 kHz, 16-bit mono speech is how many MB? Compare it with 1 minute of raw 1080p video at 30 fps.</p>
+  <p>4) List the stages (and the modules involved) when you say "translate this sentence into French" to your phone and it speaks the answer.</p>
+</div>
+<h3>Key terms</h3>
+<p><b>bus, PCIe, USB, controller, driver, polling, interrupt, handler, DMA, throughput, sensor, sample rate, frame rate, wake word, speech-to-text, text-to-speech, edge AI.</b></p>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m9.js"></script>
+</body></html>

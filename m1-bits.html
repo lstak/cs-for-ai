@@ -1,0 +1,97 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 1 · Bits, bytes & numbers</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m1"><main>
+<header>
+  <p class="kicker">Module 1</p>
+  <h1>Bits, bytes & numbers</h1>
+  <p class="lead">A computer only knows switches that are on or off. Everything an AI system touches (your words, a photo, a voice recording, the model itself) is a convention for reading patterns of switches. A model never sees a sentence or a face, only numbers.</p>
+  <ul class="goals">
+    <li>Explain what a bit and a byte are, and convert between binary and decimal.</li>
+    <li>Explain how text, images and audio become the lists of numbers that AI models work on.</li>
+    <li>Explain why <code>0.1 + 0.2 != 0.3</code> and what fp32, fp16, bf16 and 4-bit formats trade off.</li>
+    <li>Estimate how big a model's file is, and whether a given chatbot model can run on your laptop.</li>
+  </ul>
+</header>
+
+<h2>1. The bit and the byte</h2>
+<p>A <b>bit</b> is one switch: 0 or 1. A <b>byte</b> is 8 bits. With 8 bits you can make 2⁸ = 256 different patterns. What the pattern <i>means</i> depends entirely on how the program chooses to read it: as a whole number, a letter, a pixel brightness, or part of a decimal number.</p>
+<p>Binary works like decimal, except each position is worth a power of 2 instead of a power of 10: 1, 2, 4, 8, 16, 32, 64, 128.</p>
+
+<div class="widget"><h4>Interactive: the bit flipper</h4>
+  <p class="hint">Click bits to flip them. Watch the same 8 switches be read as different things.</p>
+  <div id="w-bits"></div></div>
+
+<p><b>Signed numbers.</b> To store negatives, computers use <i>two's complement</i>: the top bit counts as −128 instead of +128. That is why the same pattern <code>11111111</code> is 255 unsigned but −1 signed. Try it above.</p>
+<div class="callout ai"><p>Image pixels are usually one byte per channel (0–255). That is why you divide by 255 to normalise images, and why <code>uint8</code> overflows if you do arithmetic on it carelessly: <code>np.uint8(250) + np.uint8(10)</code> gives 4, not 260.</p></div>
+
+<h2>2. Text is numbers too</h2>
+<p>Each character gets a number (ASCII/Unicode): <code>A</code> is 65, <code>a</code> is 97. Modern text uses UTF-8, where common letters take 1 byte and others (é, 你, 😀) take 2–4. Language models add another layer on top: a <b>tokenizer</b> chops text into pieces and gives each piece an integer id. That list of ids is what the model actually receives (Module 11 shows how it is used).</p>
+<pre><code>print(ord("A"), chr(66))          # 65 B
+print(len("hello".encode("utf-8")))   # 5 bytes
+print(len("你好😀".encode("utf-8")))   # 10 bytes for 3 characters</code></pre>
+
+<h2>3. Images and sound are numbers too</h2>
+<p>The same idea covers everything else a model can perceive:</p>
+<table>
+  <tr><th>Data</th><th>How it becomes numbers</th><th>Example size</th></tr>
+  <tr><td><b>Text</b></td><td>Chopped into tokens, each an integer id</td><td>A 10-word sentence ≈ 13 numbers</td></tr>
+  <tr><td><b>Image</b></td><td>A grid of pixels; each pixel is 1 number (grey) or 3 (red, green, blue), each 0–255</td><td>224 × 224 × 3 = <b>150,528</b> numbers</td></tr>
+  <tr><td><b>Audio</b></td><td>The air-pressure wave is measured many times a second (the <i>sample rate</i>); each measurement is one number</td><td>1 second of speech at 16,000 samples/s = <b>16,000</b> numbers</td></tr>
+  <tr><td><b>Video</b></td><td>A stack of images, plus the audio</td><td>30 images per second</td></tr>
+  <tr><td><b>The model itself</b></td><td>Billions of learned numbers (the <i>weights</i>)</td><td>7,000,000,000 numbers</td></tr>
+</table>
+<p>So when an image classifier, a speech-to-text system or a chatbot "looks at" something, it receives a long list of numbers, and the "magic" is a function (Module 11) that turns one list of numbers into another.</p>
+
+<div class="widget"><h4>Interactive: an image is just a grid of numbers</h4>
+  <p class="hint">Click squares to change their brightness (0 = black, 255 = white). Watch the numbers underneath change. A model would receive these 64 numbers as one flat list.</p>
+  <div id="w-img"></div></div>
+
+<h2>4. Numbers with decimals: floating point</h2>
+<p>To store 3.14159 or 0.0000012, computers use a binary version of scientific notation: a <b>sign</b>, an <b>exponent</b> (how big), and a <b>mantissa</b> (the significant digits). The number of bits given to each decides the <i>range</i> and the <i>precision</i>.</p>
+<table>
+  <tr><th>Format</th><th>Bits</th><th>Exponent / mantissa</th><th>Approx. range</th><th>Decimal digits</th><th>Typical AI use</th></tr>
+  <tr><td>fp64 (double)</td><td>64</td><td>11 / 52</td><td>10<sup>±308</sup></td><td>~16</td><td>Python's default <code>float</code></td></tr>
+  <tr><td>fp32</td><td>32</td><td>8 / 23</td><td>10<sup>±38</sup></td><td>~7</td><td>Classic training</td></tr>
+  <tr><td>fp16</td><td>16</td><td>5 / 10</td><td>max 65,504</td><td>~3</td><td>Mixed-precision training, inference</td></tr>
+  <tr><td>bf16</td><td>16</td><td>8 / 7</td><td>10<sup>±38</sup></td><td>~2</td><td>Modern training (fp32's range, less precision)</td></tr>
+  <tr><td>int8 / int4</td><td>8 / 4</td><td>none (integers + a scale)</td><td>256 / 16 levels</td><td>n/a</td><td>Quantised inference</td></tr>
+</table>
+
+<div class="widget"><h4>Interactive: the float inspector</h4>
+  <p class="hint">Type a number, pick a format, see the actual bits and what was really stored. Try the presets.</p>
+  <div id="w-float"></div></div>
+
+<p>Key lesson: <b>most decimal numbers cannot be stored exactly</b>, just like 1/3 cannot be written exactly in decimal. 0.1 is an endless repeating fraction in binary, so the computer stores the nearest representable value. The error is tiny, but it exists.</p>
+<pre><code>print(0.1 + 0.2)            # 0.30000000000000004
+print(0.1 + 0.2 == 0.3)     # False!
+import math
+print(math.isclose(0.1 + 0.2, 0.3))   # True: always compare floats with a tolerance</code></pre>
+
+<div class="callout ai"><p><b>Why so many formats?</b> A model is billions of numbers, and each one costs bytes. Storing each number in fewer bits makes the model <i>smaller</i>, so it fits on cheaper hardware. <b>Quantisation</b> means converting a model's weights to a smaller format (say 16 bits down to 4). You lose a little precision, and the answers usually change very little. That is how a chatbot model that needs 14 GB in fp16 can run on an ordinary laptop in 4-bit form (about 3.5 GB). The two 16-bit formats differ in what they sacrifice: fp16 keeps more precision but overflows above 65,504, while bf16 keeps fp32's huge range with less precision.</p></div>
+
+<h2>5. How big is a model?</h2>
+<p>Memory = (number of parameters) × (bytes per parameter). A 7-billion-parameter model:</p>
+<table>
+  <tr><th>Format</th><th>Bytes/param</th><th>Weights only</th></tr>
+  <tr><td>fp32</td><td>4</td><td>28 GB</td></tr>
+  <tr><td>fp16 / bf16</td><td>2</td><td>14 GB</td></tr>
+  <tr><td>int8</td><td>1</td><td>7 GB</td></tr>
+  <tr><td>int4</td><td>0.5</td><td>3.5 GB</td></tr>
+</table>
+<p>This is the size of the <b>download</b> and the memory needed just to <i>run</i> the model (inference). <b>Training</b> needs several times more, because the computer must also store the corrections it is working out (Module 11), which is why training a model is done in data centres while using one can be done on a laptop or phone. The model also needs some extra memory for the conversation it is currently handling.</p>
+
+<div class="exercise">
+  <p>1) In Python, compute <code>sum([0.1]*10)</code> and compare with <code>1.0</code>. Then try <code>numpy.float16(2049)</code> and <code>numpy.float32(16777217)</code>. Explain each result using the float inspector.</p>
+  <p>2) Which of these chat models could run on a laptop with 16 GB of RAM (weights only)? (a) 7B in fp16, (b) 7B in 4-bit, (c) 70B in 4-bit. Show the arithmetic.</p>
+  <p>3) How many numbers is a 224 × 224 colour photo? A 10-second voice clip at 16,000 samples per second? Which is bigger, and by how much?</p>
+  <p>4) In the image widget, draw the letter "T" using white squares. Which of the 64 numbers are 255? Why would a model find it hard to recognise a "T" that is shifted one square to the right if it only looked at the raw list of numbers?</p>
+</div>
+
+<h3>Key terms</h3>
+<p><b>bit, byte, binary, two's complement, ASCII/UTF-8, token id, pixel, channel, sample rate, floating point, mantissa, exponent, precision, overflow, quantisation, weights.</b></p>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m1.js"></script>
+</body></html>

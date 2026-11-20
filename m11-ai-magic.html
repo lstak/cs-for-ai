@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 11 · How AI "magic" works</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m11"><main>
+<header>
+  <p class="kicker">Module 11</p>
+  <h1>How AI "magic" works</h1>
+  <p class="lead">A chatbot that writes essays, explains jokes and fixes code feels like magic. Underneath it is one simple trick repeated at enormous scale: <b>predict what comes next</b>, using numbers learned from a mountain of examples. This module opens the box, with no maths beyond arithmetic.</p>
+  <ul class="goals">
+    <li>Explain how text becomes numbers (tokens) and why the model never "sees" letters.</li>
+    <li>Explain next-token prediction, and why answers vary (temperature) and sometimes sound confident but are wrong.</li>
+    <li>Explain embeddings: meaning as position on a map.</li>
+    <li>Describe training vs. inference, and what "7 billion parameters" actually are.</li>
+    <li>Say what a model can and can't remember, and why.</li>
+  </ul>
+</header>
+
+<h2>1. The big idea: a function learned from examples</h2>
+<p>Normal programming: a person writes the rules (<code>if "refund" in email: send_to_billing()</code>). Machine learning flips this: you show the computer thousands or millions of <i>examples</i> and it finds the rules itself, stored as a huge list of numbers called <b>parameters</b> (or <b>weights</b>).</p>
+<ul>
+  <li><b>Training</b> = finding good numbers. Slow, expensive, done once (or occasionally) in a data centre.</li>
+  <li><b>Inference</b> = using the finished numbers to answer a question. Fast, done every time you press Enter.</li>
+</ul>
+<p><b>Analogy:</b> a chef who has tasted a million dishes. Nobody gave the chef a rulebook; years of tasting adjusted their instincts. Training is the years of tasting; inference is cooking tonight's dinner. <b>Where it breaks:</b> the chef knows <i>why</i> a dish tastes good. The model only knows which patterns tend to go together.</p>
+<div class="callout ai"><p>A large language model (LLM) such as Claude is one function: <code>text in → text out</code>. The "magic" is in how good that function has become, and in what you can build around it (Modules 13 and 12).</p></div>
+
+<h2>2. Step one: text becomes numbers</h2>
+<p>From Module 1: a computer only handles numbers. So before the model sees your sentence, a <b>tokenizer</b> chops it into pieces called <b>tokens</b> (whole words, parts of words, punctuation) and replaces each piece by an integer id from a fixed vocabulary of tens of thousands of entries.</p>
+<pre><code>"Unbelievably good"  →  ["Un", "believ", "ably", " good"]  →  [3118, 41203, 1521, 1695]   # ids are made up</code></pre>
+<p>A rough rule for English: <b>1 token ≈ ¾ of a word</b>, so 1,000 words ≈ 1,300 tokens. Providers charge and set limits in tokens, not words.</p>
+<div class="callout"><p><b>Why models are bad at "how many r's in strawberry":</b> the model receives token ids, not letters. Spelling and counting letters are awkward when the unit it works with is a chunk like "straw" + "berry".</p></div>
+
+<h2>3. Step two: predict the next token</h2>
+<p>The model's whole job: given all the tokens so far, output a <b>probability for every possible next token</b>. Pick one, append it, repeat. A whole answer is just this loop run hundreds of times, one token at a time.</p>
+<p>The widget below is a <i>toy</i> built from 7 short sentences, counting which word follows which. A real LLM looks at thousands of previous tokens, not just one, and learned from trillions of words, but the generating loop is the same.</p>
+
+<div class="widget"><h4>Interactive: the next-word machine</h4>
+  <p class="hint">The bars show the probability of each next word. <b>Temperature</b> controls how adventurous the pick is: low = always the top choice (predictable), high = more surprising (more creative, more mistakes). Press "Pick next word" repeatedly and watch a sentence grow.</p>
+  <div class="controls" id="nw-ctl"></div>
+  <div class="readout mono" id="nw-text"></div>
+  <div class="bars" id="nw-bars"></div>
+  <div class="readout" id="nw-note"></div></div>
+
+<p>Two lessons fall straight out of this:</p>
+<ul>
+  <li><b>Same question, different answers.</b> The pick is random (weighted by probability). Temperature changes the weighting.</li>
+  <li><b>Plausible ≠ true.</b> The model is trained to produce text that <i>looks like</i> what usually follows. If it doesn't know a fact, the most plausible continuation is still a confident-sounding sentence. That is a <b>hallucination</b>. It is not lying; there is no mechanism checking facts unless you add one (search tools, Module 13).</li>
+</ul>
+
+<h2>4. Meaning as a map: embeddings</h2>
+<p>Token ids are arbitrary labels (id 3118 isn't "closer" to 3119 in meaning). So the first thing a model does is replace each id with a list of numbers, an <b>embedding</b>, which acts like coordinates on a map of meaning. Words used in similar ways end up near each other. Real embeddings have hundreds to thousands of dimensions; the widget uses 2 so you can see them.</p>
+
+<div class="widget"><h4>Interactive: the meaning map</h4>
+  <p class="hint">Click any word to see its three nearest neighbours. Then try the famous analogy: <i>king − man + woman</i>. Directions on the map carry meaning (here, "male → female"), so adding and subtracting words does arithmetic on ideas.</p>
+  <div id="em-svg"></div>
+  <div class="controls" id="em-ctl"></div>
+  <div class="readout" id="em-out"></div></div>
+
+<div class="callout ai"><p>Embeddings are how <b>search by meaning</b> works (a "semantic search" that finds "cheap flights" when you wrote "affordable airfare") and how <b>retrieval-augmented generation (RAG)</b> finds the right document chunks to paste into a chatbot's prompt. Images and audio can be embedded onto similar maps, which is how a model can relate a photo to a caption.</p></div>
+
+<h2>5. The middle: layers and attention (a brief tour)</h2>
+<p>Between the input embeddings and the output probabilities sits a stack of dozens of <b>layers</b>. Each layer re-mixes the numbers. The key trick, <b>attention</b>, lets every token look back at the other tokens and decide which ones matter for it.</p>
+<p><b>Analogy:</b> reading <i>"The trophy didn't fit in the suitcase because <u>it</u> was too big."</i> To understand "it" you look back and weigh "trophy" more than "suitcase". Attention is that weighing, done with numbers, at every position, in every layer.</p>
+<p>Don't worry about the details; they go beyond this course (see "Where to go next"). What matters for engineers: it's <b>a large pile of matrix multiplications</b>, which is exactly what GPUs are good at (Module 3), and the numbers it multiplies are the <b>parameters</b>.</p>
+
+<h2>6. What are "7 billion parameters"?</h2>
+<p>Each parameter is one learned number, one "knob". A 7B model has 7,000,000,000 of them. They are stored as ordinary numbers (Module 1):</p>
+<p><code>7 × 10⁹ parameters × 2 bytes (fp16) = 14 GB</code> of weights, which must be loaded into GPU memory (Module 2) before the first word can be generated. Bigger models are generally more capable but need more memory, more compute and cost more per answer.</p>
+
+<h2>7. How training works, in one picture</h2>
+<ol>
+  <li><b>Guess:</b> show the model some text with the next token hidden; it outputs probabilities.</li>
+  <li><b>Measure:</b> compare to the real next token. If it gave the right token low probability, the <b>loss</b> (error score) is high.</li>
+  <li><b>Nudge:</b> a procedure called <b>backpropagation</b> works out which knobs to turn, and by how much, to make that error a bit smaller. Turn every knob a tiny amount (<b>gradient descent</b>).</li>
+  <li><b>Repeat</b> trillions of times, over weeks, on thousands of GPUs.</li>
+</ol>
+<p>This first stage (<b>pre-training</b>) produces a model that is good at continuing text. To get a helpful assistant, a second stage teaches it to follow instructions and to prefer answers people rate highly (<b>fine-tuning</b>, including learning from human feedback), plus safety training.</p>
+<div class="callout"><p><b>Common misconception:</b> "The AI learns from our chat." <b>No.</b> During inference the weights are frozen. A conversation is just more text in the model's input (its <b>context window</b>, the amount of text it can look at at once, measured in tokens). Close the chat and it's gone unless an application saves it and pastes it back in next time.</p></div>
+
+<h2>8. Beyond text</h2>
+<p>The same recipe works for other data once it's turned into numbers: an image is cut into small square <b>patches</b>, each patch becomes an embedding, and the model treats the patches like tokens. That's how a model can "look at" a screenshot or photo (Module 9 shows the data side), and why generating images, audio or code is "the same trick, different tokens".</p>
+
+<h2>9. Putting it together: what happens when you press Enter</h2>
+<pre><code>1. Your app sends your text over HTTPS to a server            (Module 6)
+2. The server tokenizes it into ids                            (Module 1)
+3. Weights (already in GPU memory) are multiplied with the    (Modules 2, 3)
+   embeddings, layer by layer, to get next-token probabilities
+4. One token is picked and sent back (streamed to you), the
+   new token is appended, and steps 3-4 repeat until done
+5. Your screen shows the words appearing one by one</code></pre>
+<p>That is why replies <i>stream</i> word by word: the model really does produce them one at a time.</p>
+
+<div class="exercise">
+  <p>1) Use the next-word machine at temperature 0.1, start from "the", and press the button 10 times, twice. Are the two sentences the same? Repeat at temperature 2. Explain the difference in your own words.</p>
+  <p>2) A 13B-parameter model in fp16: how many GB of weights? Would it fit on a 24 GB GPU? What if you also need memory for the conversation itself?</p>
+  <p>3) In the meaning map, what do you expect for <i>paris − france + italy</i>? Which cluster would you need to add to the map to try it?</p>
+  <p>4) Explain to a friend, in three sentences, why a chatbot can state something false very confidently.</p>
+</div>
+<h3>Key terms</h3>
+<p><b>parameter / weight, training, inference, token, tokenizer, vocabulary, next-token prediction, temperature, hallucination, embedding, attention, layer, loss, backpropagation, gradient descent, pre-training, fine-tuning, context window.</b></p>
+<h3>Where to go next</h3>
+<ul><li>Neural networks and backpropagation · the Transformer architecture · fine-tuning and RLHF · evaluation of models. Ask the <code>cs-tutor</code> skill for a pointer, but note that these topics go beyond this systems course.</li></ul>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m11.js"></script>
+</body></html>

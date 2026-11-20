@@ -1,0 +1,107 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 6 · Networking</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m6"><main>
+<header>
+  <p class="kicker">Module 6</p>
+  <h1>Networking</h1>
+  <p class="lead">Computers talk by chopping data into small packets, addressing each one, and letting a web of routers forward them. Layers of agreed rules (protocols) turn that unreliable mess into something that feels like a clean pipe.</p>
+  <ul class="goals">
+    <li>Explain IP addresses, ports, DNS, TCP vs UDP, HTTP and what an API call really does.</li>
+    <li>Describe what is actually sent when you chat with an AI service, and why replies stream.</li>
+    <li>Calculate a minimum network delay from distance, and explain why latency matters more than bandwidth for many small requests.</li>
+    <li>Describe how packets are split, reordered, lost and retransmitted.</li>
+  </ul>
+</header>
+
+<h2>1. The layers</h2>
+<table>
+  <tr><th>Layer</th><th>Job</th><th>Examples</th></tr>
+  <tr><td>Application</td><td>What the programs say to each other</td><td>HTTP(S), SSH, gRPC, DNS</td></tr>
+  <tr><td>Transport</td><td>Which program on the machine; reliability</td><td>TCP (reliable, ordered), UDP (fast, no promises)</td></tr>
+  <tr><td>Internet</td><td>Which machine; routing across networks</td><td>IP addresses (IPv4/IPv6)</td></tr>
+  <tr><td>Link / physical</td><td>One hop over a cable, Wi-Fi or fibre</td><td>Ethernet, Wi-Fi, 5G</td></tr>
+</table>
+<ul>
+  <li><b>IP address</b>: a machine's number (e.g. <code>93.184.216.34</code>), like a building's street address.</li>
+  <li><b>Port</b>: which program (door) at that address: 443 = HTTPS, 22 = SSH, 80 = HTTP, 8888 = Jupyter by default.</li>
+  <li><b>DNS</b>: the internet's phone book, turning names (<code>example.com</code>) into IP addresses.</li>
+  <li><b>Router</b>: forwards packets hop by hop toward the destination; it doesn't know the entire path.</li>
+</ul>
+
+<h2>2. Packets</h2>
+<p>Data is cut into <b>packets</b> (≈1,500 bytes). Each carries source, destination and a sequence number. They may take different routes, arrive out of order, or get dropped when a router is overloaded. <b>TCP</b> fixes this: it numbers packets, the receiver acknowledges them, missing ones are retransmitted, and the data is reassembled in order. <b>UDP</b> just sends and hopes; it's used where speed beats perfection (live video, games, voice).</p>
+
+<div class="widget"><h4>Interactive: send a message through a lossy network</h4>
+  <p class="hint">The message is split into numbered packets, shuffled in transit, and some are lost. TCP-style retransmission repairs it.</p>
+  <div class="controls" id="pk-ctl"></div>
+  <div><b>Sent</b> (in order)</div><div class="chips" id="pk-sent"></div>
+  <div><b>Arrived</b> (scrambled; red = lost)</div><div class="chips" id="pk-arr"></div>
+  <div><b>Retransmitted</b> after missing ACKs</div><div class="chips" id="pk-re"></div>
+  <div><b>Reassembled:</b> <span class="mono" id="pk-final"></span></div></div>
+
+<h2>3. Anatomy of a web request</h2>
+<p>When you (or your Python code) fetch <code>https://api.example.com/v1/predict</code> a whole conversation happens before you get a byte of the answer:</p>
+<ol>
+  <li><b>DNS lookup</b>: ask a resolver for the IP of the name.</li>
+  <li><b>TCP handshake</b>: SYN → SYN-ACK → ACK to open a reliable connection (one round trip).</li>
+  <li><b>TLS handshake</b>: agree on encryption keys for HTTPS (one more round trip).</li>
+  <li><b>HTTP request/response</b>: <code>GET /v1/predict</code> → <code>200 OK</code> + data (one round trip plus the server's thinking time).</li>
+</ol>
+<p>Each step costs at least one <b>round-trip time (RTT)</b>, bounded by the speed of light in fibre (about 200,000 km/s, i.e. 200 km per millisecond, so 1 ms of RTT per 100 km one way). No amount of bandwidth can beat physics.</p>
+
+<div class="widget"><h4>Interactive: a request, step by step</h4>
+  <p class="hint">Choose where the server is and whether DNS is cached. Press Play and watch where the time goes.</p>
+  <div class="controls" id="req-ctl"></div>
+  <svg id="req-svg" viewBox="0 0 640 330" width="100%" role="img" aria-label="sequence diagram"></svg>
+  <div class="readout" id="req-out"></div></div>
+
+<h2>4. What a chat with an AI really sends</h2>
+<p>When you press Enter in a chat app, the app (not the model) sends an <b>HTTPS request</b> to the AI provider's server (the steps above), usually a <code>POST</code> with a small JSON body: the conversation so far, a few settings, and a secret <b>API key</b> in a header that proves who you are (and who gets billed). The server runs the model and sends back the reply.</p>
+<pre><code>POST https://api.example-ai.com/v1/chat          # illustrative URL
+Authorization: Bearer sk-...your secret key...
+{
+  "model": "some-chat-model",
+  "max_tokens": 300,
+  "temperature": 0.7,
+  "messages": [
+    {"role": "user", "content": "Explain DNS in one sentence."}
+  ]
+}</code></pre>
+<pre><code>import requests, os
+reply = requests.post("https://api.example-ai.com/v1/chat",
+    headers={"Authorization": "Bearer " + os.environ["AI_API_KEY"]},   # key from an environment variable, never in the code
+    json={"model": "some-chat-model", "max_tokens": 300,
+          "messages": [{"role": "user", "content": "Explain DNS in one sentence."}]},
+    timeout=60)                                                         # always set a timeout
+print(reply.status_code, reply.json())</code></pre>
+<p>Things that follow from how the network works:</p>
+<ul>
+  <li><b>The whole conversation is sent every time.</b> The server doesn't remember you between requests (HTTP is "stateless"), so the app re-sends earlier messages, and longer chats mean bigger requests and more tokens to process (Modules 11 and 13).</li>
+  <li><b>Replies stream.</b> The model produces one token at a time (Module 11), so the server keeps the connection open and sends each piece as soon as it exists. You start reading after the <i>first</i> token arrives (network latency + the model's start-up), instead of waiting for the whole answer.</li>
+  <li><b>Status codes tell you what went wrong.</b> <code>200</code> OK · <code>401</code> bad API key · <code>429</code> too many requests (rate limit: wait, then retry with a growing delay) · <code>500/503</code> the server is struggling · timeouts mean the network or server is too slow (Module 6, above).</li>
+  <li><b>Secrets travel in headers over TLS.</b> That is why API keys must stay in environment variables or a secrets store, never in code you share (Module 12).</li>
+  <li><b>Location matters.</b> A server 100 ms away adds 100 ms before anything happens; for an app that chains several AI calls (Module 13), those add up. Regions are covered in Module 12.</li>
+  <li><b>SSH</b> (port 22, encrypted) is how you log into a remote machine; <code>scp</code>/<code>rsync</code> copy files, such as a model's weights.</li>
+</ul>
+<pre><code># From a terminal: see the steps for real
+nslookup example.com                  # DNS
+ping -c 4 example.com                 # round-trip time
+curl -v https://example.com 2&gt;&amp;1 | head -30   # watch TCP, TLS and HTTP happen
+traceroute example.com                # the routers on the way</code></pre>
+
+<div class="exercise">
+  <p>1) Run <code>ping</code> to a server on another continent. Compare the number with the "across the ocean" setting in the widget.</p>
+  <p>2) An AI assistant answers a question by making 3 tool calls (Module 13), one after another, each needing 1 round trip to a server 150 ms away, plus a model call (also 1 round trip) before and after. What is the minimum waiting time caused by distance alone? What would change if the tools ran on the same machine as the model?</p>
+  <p>3) Explain, to a friend, in two sentences, why a chatbot's answer appears word by word instead of all at once.</p>
+  <p>4) You get an HTTP <code>429</code> from an AI API. Is this your code's bug, a network failure, or something else? What should the program do?</p>
+</div>
+<h3>Key terms</h3>
+<p><b>packet, IP address, port, DNS, router, TCP, UDP, handshake, TLS, HTTP, API, API key, JSON, status code, rate limit, streaming, RTT, latency, bandwidth, SSH.</b></p>
+
+<div class="callout tip"><p><b>Next:</b> Module 7 builds on this. HTTP, introduced here, is the language of the Web: websites, APIs and streaming are all HTTP conversations.</p></div>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m6.js"></script>
+</body></html>

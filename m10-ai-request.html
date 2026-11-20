@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 10 · Life of an AI request</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m10"><main>
+<header>
+  <p class="kicker">Module 10 · Capstone</p>
+  <h1>Life of an AI request</h1>
+  <p class="lead">Time to put every layer together. You type a question into a chatbot and press Enter. A second or two later, words start to appear. We'll follow that one message from your keyboard, across the network, through a GPU in a data centre, and back to your screen, and see which part of this course explains each step.</p>
+  <ul class="goals">
+    <li>Narrate, layer by layer, what happens between pressing Enter and reading the first word.</li>
+    <li>Explain why a reply <i>streams</i>, why a big model is slower than a small one, and why a long prompt delays the first word.</li>
+    <li>Read an error message and name the layer it came from.</li>
+    <li>See how other AI jobs (images, speech, search, training) use the same layers differently.</li>
+  </ul>
+</header>
+
+<div class="callout"><p>Modules 11–13 zoom in on three parts of this story (what the model is, where it runs, and how agents use tools). You can read them before or after this capstone; the story below points to them.</p></div>
+
+<h2>1. The story, step by step</h2>
+<p>Press <b>Next step</b> to follow one message. Each step names the layer involved and the module that explains it.</p>
+<div class="widget"><h4>Interactive: follow one chat message</h4>
+  <div class="controls" id="st-ctl"></div>
+  <div id="st-log"></div></div>
+
+<h2>2. Where does the time go?</h2>
+<p>From the story you can already predict the waiting. Some delays come from <b>distance</b> (the speed of light, Module 6), some from <b>queueing</b>, some from <b>reading your prompt</b> (lots of parallel maths, Module 3), and the rest from <b>writing the answer one token at a time</b> (reading every weight from memory per token, Modules 2 and 3). The model's size and number format (Module 1) decide how many GPUs it needs and how quickly it can write.</p>
+
+<div class="widget"><h4>Interactive: the timeline of one chat request</h4>
+  <p class="hint">Illustrative numbers for one request on typical data-centre GPUs (80 GB each, ~1 TB/s usable memory bandwidth, ~150 TFLOP/s usable). Real services batch many users and use other tricks, so treat the output as a model of <i>why</i>, not a benchmark. Try: a 70B model, a 30,000-token document, a server on the other side of the planet.</p>
+  <div class="controls" id="tl-ctl"></div>
+  <div id="tl-bars" class="bars"></div>
+  <div class="readout" id="tl-out"></div></div>
+
+<div class="callout ai"><p><b>Three things this timeline explains:</b> (1) <b>Streaming</b> exists because the whole answer can take many seconds, but the first word only needs the first four stages, so showing words as they appear makes it <i>feel</i> instant. (2) A <b>long prompt</b> (pasting a whole document) delays the first word, because all of it must be processed before writing begins. (3) A <b>bigger model</b> needs more GPUs and writes more slowly: it has more weights to read for every single token. That is also why providers offer small, fast models and large, slow ones.</p></div>
+
+<h2>3. Same layers, different AI jobs</h2>
+<p>Chat is only one shape. The layers are the same; what flows through them differs:</p>
+<table>
+  <tr><th>AI job</th><th>What goes in (as numbers)</th><th>What the work looks like</th><th>What comes out</th></tr>
+  <tr><td><b>Chat / writing</b></td><td>Token ids (Module 11)</td><td>Read the prompt in parallel, then write one token at a time</td><td>Streamed text</td></tr>
+  <tr><td><b>Image generation</b></td><td>Text prompt → embedding; a grid of random noise</td><td>The model "cleans up" the noise in ~20–50 passes, each a full matrix-heavy pass over the whole image</td><td>A pixel grid (Module 1)</td></tr>
+  <tr><td><b>Speech-to-text</b></td><td>Audio samples (16,000 per second)</td><td>Audio is cut into short windows, each turned into text pieces</td><td>Streamed text</td></tr>
+  <tr><td><b>Photo recognition</b></td><td>Pixels</td><td>One pass through the network: milliseconds, so it can run on a phone (Module 9)</td><td>Labels and boxes</td></tr>
+  <tr><td><b>Search / recommendations</b></td><td>Embeddings (meaning as coordinates, Module 11)</td><td>Compare a query vector with millions of stored vectors held in RAM (Module 2)</td><td>A ranked list</td></tr>
+  <tr><td><b>Agent</b></td><td>Chat + tool descriptions (Module 13)</td><td>Several chat requests in a loop, with your code running tools in between</td><td>Actions and a final answer</td></tr>
+  <tr><td><b>Training / fine-tuning</b></td><td>Batches of examples</td><td>See below</td><td>A new set of weights</td></tr>
+</table>
+
+<h2>4. Training in the same picture</h2>
+<p>Everything above is <b>using</b> a finished model. <b>Training</b> (and its cheaper cousin, <b>fine-tuning</b>) is the same machinery in a loop that also <i>changes</i> the weights (Module 11):</p>
+<ol>
+  <li>Read a batch of examples from storage (Module 2) and turn them into numbers (Module 1).</li>
+  <li>Copy the batch to the GPU and run it through the model.</li>
+  <li>Measure how wrong the output was, work out how to nudge every weight, and apply the nudge.</li>
+  <li>Repeat millions of times, saving a <b>checkpoint</b> (a copy of the weights) every so often so a crash doesn't lose days of work.</li>
+</ol>
+<p>It needs several times more GPU memory than using the model, because the corrections must be stored too (Module 1), and it can run for days or weeks on many GPUs talking over very fast links. The pipeline idea applies: if the GPU sits idle, something upstream (slow storage, slow data preparation) isn't feeding it fast enough. In practice most people use an existing model and either call it via an API or fine-tune it briefly, rather than training from scratch.</p>
+
+<h2>5. Reading errors by layer</h2>
+<p>You now have a map. When something fails, ask: <i>which layer is complaining?</i></p>
+<table>
+  <tr><th>What you see</th><th>Layer</th><th>What it means</th></tr>
+  <tr><td><code>401 Unauthorized</code></td><td>API / account (Modules 6, 12)</td><td>Missing or wrong API key</td></tr>
+  <tr><td><code>429 Too Many Requests</code></td><td>API service (Modules 6, 12)</td><td>Rate limit. Wait and retry with increasing delays</td></tr>
+  <tr><td><code>Connection timed out</code> / <code>Connection reset</code></td><td>Network (Module 6)</td><td>The packets did not get through in time. Check connectivity, region and timeouts</td></tr>
+  <tr><td>"Prompt too long" / "maximum context length"</td><td>The model (Module 11)</td><td>Your conversation plus the answer would exceed the context window. Shorten, summarise, or retrieve only the relevant parts</td></tr>
+  <tr><td><code>CUDA out of memory</code></td><td>GPU memory (Modules 2, 3)</td><td>The model plus the conversation does not fit in VRAM. Use a smaller or quantised model</td></tr>
+  <tr><td><code>Killed</code> (no explanation)</td><td>Operating system (Module 4)</td><td>RAM ran out; the OS OOM-killed the process</td></tr>
+  <tr><td><code>No space left on device</code></td><td>Disk (Module 2)</td><td>Often a big model download filled the disk</td></tr>
+  <tr><td><code>ModuleNotFoundError</code>, CUDA version mismatch</td><td>Environment / drivers (Module 5)</td><td>Wrong or missing packages or driver versions</td></tr>
+  <tr><td>A fluent, confident, <b>wrong</b> answer</td><td>The model, not the computer (Module 11)</td><td>Nothing is broken: it produced a plausible continuation. Add sources, tools or checking (Module 13)</td></tr>
+  <tr><td>An agent loops or does something unwanted</td><td>The agent design (Module 13)</td><td>Step limits, permissions and approval steps are missing</td></tr>
+</table>
+<pre><code># Diagnostics, cheapest first
+ping -c 4 example.com     # is the network up, how far is it?
+df -h                     # disk space
+free -h                   # RAM
+nvidia-smi                # GPU memory, temperature, what is using it
+python -c "import torch; print(torch.cuda.is_available())"</code></pre>
+
+<div class="exercise">
+  <p>1) In the timeline widget, use a 7B model in 16-bit, a server 1,000 km away, a 1,000-token prompt and a 300-token answer. When does the first word appear, and when is the answer complete? Now switch to a 70B model. Which stage changed the most, and why?</p>
+  <p>2) Paste a 30,000-token document as the prompt. What happens to the time to the first word? Which stage is responsible and which module explains it?</p>
+  <p>3) Move the server 12,000 km away. Which stage changes? Does the reply feel much slower once it is streaming? Why or why not?</p>
+  <p>4) Change the model format from 16-bit to 4-bit. Which numbers change and why? (Hint: Modules 1 and 3.)</p>
+  <p>5) <b>Write one paragraph</b>, from memory, narrating "pressing Enter in a chatbot" until the first word appears, using at least 8 terms from earlier modules.</p>
+</div>
+
+<h3>Where to go next</h3>
+<ul>
+  <li><b>Modules 11–13</b> if you haven't read them: <a href="m11-ai-magic.html">how AI "magic" works</a>, <a href="m12-cloud.html">the cloud</a>, <a href="m13-agents.html">agents, tools and MCP</a>.</li>
+  <li>Build something small: call a model API from Python, then give it one tool (Module 13).</li>
+  <li>Deeper topics: neural networks and Transformers · retrieval-augmented generation · evaluating AI systems · distributed training · safety and security of AI applications.</li>
+  <li>Keep the <code>cs-tutor</code> skill on hand: ask it to design new exercises or quiz you on any module.</li>
+</ul>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m10.js"></script>
+</body></html>

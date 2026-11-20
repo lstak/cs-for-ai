@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 3 · CPU vs GPU</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m3"><main>
+<header>
+  <p class="kicker">Module 3</p>
+  <h1>CPU vs GPU</h1>
+  <p class="lead">The CPU is a few brilliant generalists; the GPU is thousands of simple workers doing the same thing in lockstep. Running a neural network (a chatbot, an image generator, a speech recogniser) is almost entirely "the same simple operation on huge piles of numbers", which is exactly what GPUs are built for.</p>
+  <ul class="goals">
+    <li>Describe what a CPU core does (fetch, decode, execute) and what a clock speed means.</li>
+    <li>Explain why GPUs win at matrix multiplication and lose at branchy, sequential code.</li>
+    <li>Explain what a neural network layer actually computes, in plain terms.</li>
+    <li>Estimate the work needed for one word of a chatbot reply, and why that needs a GPU.</li>
+  </ul>
+</header>
+
+<h2>1. What a CPU core does</h2>
+<p>A CPU core repeats one loop billions of times per second: <b>fetch</b> the next instruction from memory, <b>decode</b> what it asks, <b>execute</b> it (add two numbers, compare, jump, load, store), then write back the result. An instruction is tiny: "add register 3 to register 5". Programs in any language are eventually translated to millions of such instructions (Module 5).</p>
+<ul>
+  <li><b>Clock speed</b> (e.g. 3.5 GHz) = how many ticks per second. More ticks, more instructions.</li>
+  <li><b>Cores</b> = independent workers. A laptop has 4–16; a server up to 128+.</li>
+  <li>CPU cores are <i>smart</i>: they guess which way an <code>if</code> will go (branch prediction), reorder instructions, and keep big caches, so even complicated, unpredictable code runs fast.</li>
+</ul>
+
+<h2>2. What a GPU does differently</h2>
+<p>Graphics needs the same small calculation on millions of pixels. GPUs therefore trade cleverness for numbers: thousands of simple cores, each slower and dumber than a CPU core, grouped so that 32 or so run the <i>same instruction at the same time</i> on different data (called SIMT/SIMD: "single instruction, multiple data"). If threads in a group want to take different <code>if</code> branches, the group runs both paths one after another ("divergence"), and the speed advantage collapses.</p>
+
+<div class="widget"><h4>Interactive: the race</h4>
+  <p class="hint">Both machines must compute all 1,600 cells of a result. Each "tick" a CPU core finishes 4 cells; a GPU core finishes 1 (it is slower per core). Choose the kind of work and press Start.</p>
+  <div class="controls" id="race-ctl"></div>
+  <div class="twocol">
+    <div><b>CPU</b> <span id="cpu-info" class="pill"></span><br><canvas id="cpu-cv" width="240" height="240"></canvas><div id="cpu-t" class="stat"></div></div>
+    <div><b>GPU</b> <span id="gpu-info" class="pill"></span><br><canvas id="gpu-cv" width="240" height="240"></canvas><div id="gpu-t" class="stat"></div></div>
+  </div>
+  <p id="race-msg" class="lead"></p></div>
+
+<div class="callout"><p><b>Take-away:</b> A GPU is not "a faster CPU". It is a different tool. Same operation × millions of items → GPU wins by 10–100×. Complicated decisions per item, or little data → the CPU wins, and copying data to the GPU might cost more than the work saves.</p></div>
+
+<h2>3. Matrix multiplication: the heart of AI</h2>
+<p><b>What a layer does, in plain words.</b> Imagine 3 input numbers and 2 output numbers. Each output is a <i>weighted sum</i> of the inputs: "2 parts of the first input, minus 1 part of the second, plus half of the third". The weights are the learned numbers (Module 11). Do this for every output and you have a <b>matrix multiplication</b>. A model stacks dozens of such layers with small non-linear tweaks between them, and that stack <i>is</i> the "intelligence". Nothing more mysterious happens inside than multiplying and adding at huge scale.</p>
+<p>A neural network layer is mostly <code>y = x @ W</code>: a matrix multiplication. Multiplying two <i>n × n</i> matrices takes about <b>2n³</b> floating-point operations (FLOPs: multiplies and adds). Doubling <i>n</i> makes it 8× more work. Hardware speed is quoted in FLOP/s: a laptop CPU gives ~100–500 GFLOP/s, a gaming GPU ~20–80 TFLOP/s, a data-centre GPU several hundred TFLOP/s in 16-bit formats.</p>
+
+<div class="widget"><h4>Interactive: how long does one matrix multiply take?</h4>
+  <p class="hint">Illustrative sustained speeds. Notice also the memory each matrix needs: it must fit in the device's memory.</p>
+  <div class="controls" id="mm-ctl"></div>
+  <div id="mm-out" class="bars"></div><div id="mm-note" class="readout"></div></div>
+
+<h2>4. What it costs to produce one word</h2>
+<p>A chatbot writes its reply one token at a time (Module 11). For each token, every one of the model's parameters takes part in the arithmetic (about one multiply and one add each), so:</p>
+<p><code>work per token ≈ 2 × parameters</code> &nbsp;→&nbsp; 7B model: 2 × 7×10⁹ = <b>14 billion operations per token</b>.</p>
+<p>A 300-token answer is 300 × 14 GFLOP ≈ 4 TFLOP. On a laptop CPU doing ~200 GFLOP/s that is ~20 s of pure arithmetic, so a few seconds on a gaming GPU at 20–80 TFLOP/s is a big difference. That gap is why AI runs on GPUs.</p>
+<p>There's a second limit, <b>memory</b>: for each token the GPU must also <i>read all 14 GB of weights</i> from its memory. A GPU with ~1,000 GB/s of memory bandwidth needs 14 ms for that read, which caps generation at roughly 70 tokens per second no matter how fast its cores are. This is the same bandwidth idea as Module 2, and it explains why:</p>
+<ul>
+  <li><b>Smaller (quantised) models generate faster</b> as well as fitting in less memory (Module 1).</li>
+  <li><b>Replies stream word by word</b> at a steady speed, regardless of how simple the question was.</li>
+  <li><b>Big models need several GPUs</b>, partly to hold the weights and partly to add memory bandwidth.</li>
+</ul>
+<p>Other accelerators (TPUs, phone NPUs, Apple's Neural Engine) follow the same recipe: specialise the chip for matrix math and feed it fast memory.</p>
+
+<pre><code># Try it: time one big matrix multiplication on CPU vs GPU (needs PyTorch; the GPU part needs an NVIDIA GPU or Colab)
+import torch, time
+n = 4096
+a, b = torch.randn(n, n), torch.randn(n, n)
+t = time.time(); a @ b; print("CPU:", time.time() - t)
+if torch.cuda.is_available():
+    a, b = a.cuda(), b.cuda()
+    a @ b; torch.cuda.synchronize()        # warm-up (first call is slow)
+    t = time.time(); a @ b; torch.cuda.synchronize()   # GPU runs asynchronously!
+    print("GPU:", time.time() - t)</code></pre>
+<div class="callout warn"><p>GPU calls return <i>immediately</i> while the work runs in the background. Always call <code>torch.cuda.synchronize()</code> before stopping the timer, or you'll measure nothing and think the GPU is infinitely fast.</p></div>
+
+<div class="exercise">
+  <p>1) In the race, set GPU cores to 64 and CPU cores to 16 with "same operation" work. Who wins? Roughly how many GPU cores do you need to beat the CPU?</p>
+  <p>2) A 13B-parameter model: how many operations per generated token? A 500-token answer at 200 GFLOP/s (laptop CPU) vs 20 TFLOP/s (gaming GPU)? Estimate both times.</p>
+  <p>3) Weights of a 13B model in 4-bit are about 6.5 GB. With 500 GB/s of memory bandwidth, what is the maximum number of tokens per second? How does that compare with the same model in fp16?</p>
+</div>
+<h3>Key terms</h3>
+<p><b>instruction, clock speed, core, branch, SIMD/SIMT, divergence, matrix multiplication, weighted sum, FLOP/s, memory bandwidth, kernel, TPU/NPU.</b></p>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m3.js"></script>
+</body></html>

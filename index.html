@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>How Computers Work: a crash course for AI practitioners</title>
+<link rel="stylesheet" href="assets/style.css">
+</head>
+<body data-module="">
+<main>
+  <p class="kicker">Self-paced crash course</p>
+  <h1>How Computers Work</h1>
+  <p class="lead">Hardware, operating systems, software, networking, the Web, data and peripherals, plus how AI models, the cloud and AI agents actually work. Explained for AI practitioners with no computer-science background. Every idea comes with an interactive graphic and is tied to something you will meet when building or using AI.</p>
+
+  <div class="callout">
+    <p><b>Who this is for:</b> you can write basic Python (variables, loops, functions, lists). You do <i>not</i> need to know anything about hardware or networks.</p>
+    <p><b>How long:</b> about 45–60 minutes per module, 13 modules. Modules 1–10 build the foundations in order (hardware, OS, software, networking, the Web, peripherals, and a capstone); Modules 11–13 (how AI works, the cloud, agents) use those foundations and can be read in any order afterwards.</p>
+  </div>
+
+  <h2>The big picture: four layers</h2>
+  <p>A computer system is built as a <b>stack of layers</b>. Each layer offers a simple service to the layer above and hides the messy details of the one below. You can use a chatbot without knowing how a GPU works, and write a web page without knowing how electricity moves through a cable. That is the idea that holds the whole course together.</p>
+  <div class="widget"><h4>Interactive: the layered architecture</h4>
+    <p class="hint">Click any layer to learn what it does and which modules cover it. Press <b>Send a request</b> to follow one message (say, your chat question) down your computer's layers, across the network, and up the server's layers.</p>
+    <div class="controls" id="arch-ctl"></div>
+    <div id="arch-svg"></div>
+    <div class="callout" id="arch-panel"></div></div>
+  <table>
+    <tr><th>Layer</th><th>What it is</th><th>Examples</th><th>Modules</th></tr>
+    <tr><td><b>Applications</b></td><td>The programs you use or write. They ask the layers below for help.</td><td>Browser, chat app, Python script, web server, AI model server, agent</td><td>5, 7, 9, 10, 12</td></tr>
+    <tr><td><b>Networking</b></td><td>Agreed rules (protocols) for machines to exchange data, so a message can cross the world.</td><td>DNS, TCP/IP, TLS, HTTP</td><td>6, 7</td></tr>
+    <tr><td><b>Operating system</b></td><td>The manager. Shares the hardware between programs and keeps them apart. Also contains the software that runs the network protocols.</td><td>Linux, Windows, macOS, WSL2</td><td>4</td></tr>
+    <tr><td><b>Hardware</b></td><td>The physical machine, where everything is finally bits and electricity.</td><td>CPU, GPU, RAM, SSD, network card, camera, microphone</td><td>1, 2, 3, 8</td></tr>
+  </table>
+  <div class="callout"><p><b>A simplification, honestly stated.</b> The network software actually lives <i>inside</i> the operating system (and the network card), but it is such an important idea (it is how two stacks talk to each other) that we draw it as its own layer. Also, real systems have more layers than four; this is the map, not the territory.</p></div>
+  <p><b>Why layers matter for you:</b> when something goes wrong, the first question is <i>which layer?</i> "Connection timed out" is networking, "Killed" is the operating system, "CUDA out of memory" is hardware, and a wrong answer from a chatbot is the application (the model). Modules 12 (the cloud) and 12 (agents) build on all four layers, and Module 10 follows one message through every one of them.</p>
+
+  <h2>Modules</h2>
+  <div class="cards" id="cards"></div>
+
+  <h2>How to learn from this course</h2>
+  <ul>
+    <li><b>Play with every graphic.</b> They are the lesson, not decoration. Change a slider and predict what happens <i>before</i> you look.</li>
+    <li><b>Run the code blocks.</b> Copy them into a Python file or notebook. They are short on purpose.</li>
+    <li><b>Take the quiz.</b> Answering all questions correctly ticks the module off (progress is stored in your browser only).</li>
+    <li><b>Ask Claude when stuck.</b> See below.</li>
+  </ul>
+
+  <h2>Get a personal tutor: the <code>cs-tutor</code> skill</h2>
+  <p>This course ships with a Claude skill that turns Claude into a patient tutor for exactly this material: it explains at beginner level, uses analogies, quizzes you, and sends you back to the right module.</p>
+  <h3>Option A: Claude Code (terminal)</h3>
+  <p>Open Claude Code <b>in this folder</b>. The skill at <code>.claude/skills/cs-tutor/SKILL.md</code> is picked up automatically. Then just ask, or type <code>/cs-tutor</code>:</p>
+  <pre><code>cd cs-for-ai
+claude
+&gt; /cs-tutor why does my local chatbot crash with "CUDA out of memory"?</code></pre>
+  <h3>Option B: Claude.ai or other projects</h3>
+  <p>Download the skill and upload the zip under <i>Settings → Capabilities → Skills</i>, or unzip it into <code>~/.claude/skills/</code> to use it everywhere in Claude Code. If your setup has no skills, paste the contents of <code>SKILL.md</code> as the first message of a chat.</p>
+  <div class="callout tip"><p><b>Downloads:</b>
+    <a href="downloads/cs-tutor.zip" download>cs-tutor.zip</a> (ready to upload, contains <code>cs-tutor/SKILL.md</code>) ·
+    <a href="downloads/SKILL.md" download>SKILL.md</a> (the plain file)</p></div>
+  <div class="callout tip"><p>Good questions to ask: “Quiz me on module 3.” · “How does an AI agent decide to use a tool?” · “Explain virtual memory like I'm a biologist.” · “Why does my chatbot answer word by word?” · “Give me a harder exercise on networking.”</p></div>
+
+  <h2>What you will be able to do afterwards</h2>
+  <ul>
+    <li>Read an error such as <i>429 Too Many Requests</i>, <i>CUDA out of memory</i>, <i>Killed</i> or <i>Connection timed out</i> and know which layer it came from.</li>
+    <li>Explain how text, images and sound become numbers, and how big an AI model really is.</li>
+    <li>Explain how a website and a web API work (HTTP, HTML/CSS/JS, rendering, REST, WebSockets) and how a chat app talks to an AI model.</li>
+    <li>Follow one chatbot message from keyboard to screen and say what each layer does.</li>
+    <li>Make rough size, time and cost estimates for running an AI model (a laptop, a rented GPU or an API) with reasons, not folklore.</li>
+    <li>Explain, in plain words, how a chatbot turns text into numbers, predicts an answer, and why it can be confidently wrong.</li>
+    <li>Describe an AI agent (the loop, tools, MCP) and judge its risks and costs.</li>
+    <li>Choose between a hosted model API and renting your own cloud GPU, with a rough cost estimate.</li>
+    <li>Talk to engineers and cloud/IT teams in their vocabulary.</li>
+  </ul>
+  <p style="margin-top:40px;color:var(--muted);font-size:14px">Numbers in the simulations are realistic orders of magnitude, simplified for teaching; real hardware varies.</p>
+  <p style="color:var(--muted);font-size:14px">This course is licensed under <a href="https://creativecommons.org/licenses/by/4.0/" rel="license">Creative Commons Attribution 4.0 (CC BY 4.0)</a>: you may share and adapt it, including commercially, if you give appropriate credit.</p>
+</main>
+<script src="assets/common.js"></script>
+<script>
+  const p = Progress.get();
+  $('#cards').append(...MODULES.map((m, i) => h('a', { class: 'card' + (p[m.id] ? ' done' : ''), href: m.file },
+    h('div', { class: 'n' }, 'MODULE ' + (i + 1) + (p[m.id] ? ' ✓' : '')), h('h3', {}, m.title), h('p', {}, m.blurb))));
+</script>
+<script>
+(function () {
+  const LAYERS = {
+    app: { name: 'Applications', color: '#3b5bdb', mods: ['m5', 'm7', 'm10', 'm11', 'm13'],
+      text: '<b>Applications</b> are the programs people actually use or write: a browser, a chat app, your Python script, a web server, an AI model server, an agent. They do the useful work, but they never touch the hardware directly. They ask the layers below (through "system calls" and network connections) to do it for them.' },
+    net: { name: 'Networking', color: '#0ca678', mods: ['m6', 'm7'],
+      text: '<b>Networking</b> is a set of agreed rules (protocols) that let two machines talk: DNS finds the address, TCP/IP cuts data into packets and delivers them reliably, TLS encrypts, HTTP says what is being asked. Each side runs the same rules, so a browser in one country can talk to a server in another. (The protocol software runs inside the operating system and the network card.)' },
+    os: { name: 'Operating system', color: '#f08c00', mods: ['m4'],
+      text: 'The <b>operating system</b> (Linux, Windows, macOS) is the manager between programs and hardware. It shares the CPU between many programs (scheduling), gives each its own private memory, provides files, enforces permissions, and runs <b>drivers</b> that know how to talk to each device. It hides the differences between machines.' },
+    hw: { name: 'Hardware', color: '#9c36b5', mods: ['m1', 'm2', 'm3', 'm9'],
+      text: '<b>Hardware</b> is the physical machine: CPU and GPU that calculate, RAM and disk that remember, a network card that sends signals, and sensors such as cameras and microphones. At this level everything is numbers stored as bits (Module 1) and moved around buses.' },
+  };
+  const ORDER = ['app', 'net', 'os', 'hw'];
+  const Y = { app: 50, net: 130, os: 200, hw: 270 }, H = { app: 70, net: 60, os: 60, hw: 70 };
+  const SUB = {
+    L: { app: 'browser · chat app · Python', net: 'HTTP · TLS · TCP/IP · DNS', os: 'Linux · Windows · macOS', hw: 'CPU · GPU · RAM · SSD · NIC' },
+    R: { app: 'web server · AI model server', net: 'HTTP · TLS · TCP/IP', os: 'Linux (usually)', hw: 'CPU · GPU · RAM · SSD · NIC' },
+  };
+  const STEPS = [
+    { on: ['L-app'], t: '1. <b>Application:</b> your chat app builds a request: "answer this question", as JSON text (Modules 5, 7).' },
+    { on: ['L-net'], t: '2. <b>Networking:</b> DNS finds the server, TLS encrypts the message, TCP/IP cuts it into packets with addresses on them (Module 6).' },
+    { on: ['L-os'], t: '3. <b>Operating system:</b> the kernel takes the data from your program, runs the protocol software, and asks the network card\'s driver to send it (Module 4).' },
+    { on: ['L-hw'], t: '4. <b>Hardware:</b> the network card turns the bits into electrical, radio or light signals (Modules 1, 9).' },
+    { on: ['mid'], t: '5. <b>The network:</b> cables, Wi-Fi and routers pass the packets along, hop by hop. Distance costs time: about 1 ms of round trip per 100 km.' },
+    { on: ['R-hw'], t: '6. <b>Hardware (server):</b> the server\'s network card receives the signals and turns them back into bits.' },
+    { on: ['R-os'], t: '7. <b>Operating system (server):</b> its driver and kernel collect the packets and pass them upwards.' },
+    { on: ['R-net'], t: '8. <b>Networking (server):</b> TCP puts the packets back in order, TLS decrypts, HTTP is read. The server now has your request again.' },
+    { on: ['R-app'], t: '9. <b>Application (server):</b> the AI model server runs the model on the GPU (Modules 3, 11) and sends the answer back <b>along the same path in reverse</b>: down its stack, across the network, up yours.' },
+  ];
+  const rects = {};
+  let sel = null, step = -1;
+  const svg = sv('svg', { viewBox: '0 0 760 372', width: '100%', role: 'img', 'aria-label': 'Layered architecture: two machines, each with applications, networking, operating system and hardware layers, connected by a network' });
+  const txt = (x, y, str, size, bold, anchor) => sv('text', { x, y, 'font-size': size, 'font-weight': bold ? 700 : 400, fill: 'currentColor', 'text-anchor': anchor || 'middle', style: 'pointer-events:none' }, str);
+  svg.append(txt(145, 28, 'Your computer', 15, true), txt(615, 28, 'A server in a data centre', 15, true));
+  function layerBox(side, k, x) {
+    const L = LAYERS[k], g = sv('g', { style: 'cursor:pointer' });
+    const r = sv('rect', { x, y: Y[k], width: 250, height: H[k], rx: 10, fill: L.color, 'fill-opacity': 0.16, stroke: L.color, 'stroke-width': 2 });
+    g.append(r, txt(x + 125, Y[k] + H[k] / 2 - 2, L.name, 15, true), txt(x + 125, Y[k] + H[k] / 2 + 16, SUB[side][k], 11.5, false));
+    g.addEventListener('click', () => { step = -1; sel = k; draw(); });
+    rects[side + '-' + k] = r; svg.append(g);
+  }
+  for (const k of ORDER) { layerBox('L', k, 20); layerBox('R', k, 490); }
+  const dash = (y, c) => sv('line', { x1: 272, y1: y, x2: 488, y2: y, stroke: c, 'stroke-width': 2, 'stroke-dasharray': '6 5' });
+  svg.append(dash(85, LAYERS.app.color), txt(380, 76, 'apps talk: requests and replies', 11.5, false),
+    dash(160, LAYERS.net.color), txt(380, 151, 'protocols: the same rules both sides', 11.5, false));
+  svg.append(txt(380, 232, 'OS and hardware only talk to', 11.5, false), txt(380, 247, 'the layer next to them', 11.5, false));
+  rects.mid = sv('rect', { x: 300, y: 281, width: 160, height: 52, rx: 26, fill: '#868e96', 'fill-opacity': 0.16, stroke: '#868e96', 'stroke-width': 2 });
+  svg.append(sv('line', { x1: 270, y1: 307, x2: 300, y2: 307, stroke: '#868e96', 'stroke-width': 3 }), sv('line', { x1: 460, y1: 307, x2: 490, y2: 307, stroke: '#868e96', 'stroke-width': 3 }),
+    rects.mid, txt(380, 303, 'The network', 14, true), txt(380, 320, 'cables · Wi-Fi · routers', 11.5, false));
+  svg.append(txt(380, 362, 'Real data physically travels down one stack, across the network and up the other. Logically, each layer "talks" to its twin.', 12, false));
+  $('#arch-svg').append(svg);
+
+  const panel = $('#arch-panel');
+  function draw() {
+    const active = step >= 0 ? STEPS[step].on : [];
+    for (const [key, r] of Object.entries(rects)) {
+      const k = key.split('-')[1], isOn = active.includes(key), isSel = step < 0 && sel && key !== 'mid' && k === sel;
+      r.setAttribute('fill-opacity', isOn ? 0.6 : isSel ? 0.38 : 0.16);
+      r.setAttribute('stroke-width', isOn || isSel ? 4 : 2);
+    }
+    if (step >= 0) panel.innerHTML = STEPS[step].t;
+    else if (sel) {
+      const L = LAYERS[sel];
+      panel.innerHTML = L.text + '<div style="margin-top:6px"><b>Covered in:</b> ' + L.mods.map(id => { const i = MODULES.findIndex(m => m.id === id); return `<a href="${MODULES[i].file}">Module ${i + 1} · ${MODULES[i].title}</a>`; }).join(' · ') + '</div>';
+    } else panel.textContent = 'Click a layer, or press "Send a request".';
+  }
+  $('#arch-ctl').append(
+    h('button', { class: 'primary', onclick: () => { sel = null; step = Math.min(step + 1, STEPS.length - 1); draw(); } }, 'Send a request / next step'),
+    h('button', { onclick: () => { step = -1; sel = null; draw(); } }, 'Reset'));
+  draw();
+})();
+</script>
+</body>
+</html>

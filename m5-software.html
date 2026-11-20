@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 5 · From code to hardware</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m5"><main>
+<header>
+  <p class="kicker">Module 5</p>
+  <h1>From code to hardware</h1>
+  <p class="lead">Your Python line <code>reply = model.generate(prompt)</code> passes through half a dozen layers of software before a single transistor flips. Knowing the layers tells you what an AI "model" actually is as a piece of software, where it comes from, and where errors originate.</p>
+  <ul class="goals">
+    <li>Explain the difference between interpreted and compiled code and why Python is slow but NumPy is fast.</li>
+    <li>Trace a line of Python down through libraries, the OS and drivers to the hardware.</li>
+    <li>Explain what libraries, packages, virtual environments and containers solve.</li>
+    <li>Describe the pieces of the AI software ecosystem: frameworks, model files, model hubs, inference engines and hosted APIs.</li>
+  </ul>
+</header>
+
+<h2>1. Machine code and languages</h2>
+<p>The CPU only understands <b>machine code</b>: raw binary instructions specific to its architecture (x86-64 in most PCs/servers, ARM in phones and Apple chips). Humans write in higher-level languages and a translator converts them:</p>
+<table>
+  <tr><th>Approach</th><th>How</th><th>Examples</th><th>Trade-off</th></tr>
+  <tr><td>Compiled</td><td>Translate the whole program to machine code <i>before</i> running</td><td>C, C++, Rust, Go</td><td>Fast to run; slower to develop</td></tr>
+  <tr><td>Interpreted</td><td>A program (the interpreter) reads your code and does what it says, line by line</td><td>Python, JavaScript (mostly)</td><td>Easy and flexible; 10–100× slower per operation</td></tr>
+  <tr><td>JIT-compiled</td><td>Compile hot parts while running</td><td>Numba, <code>torch.compile</code>, JAX</td><td>Best of both, with warm-up cost</td></tr>
+</table>
+<p>CPython (the standard Python) is itself a C program. It converts your code to <b>bytecode</b>, then loops over the bytecode doing checks for every operation ("is this an int? a list?"). That per-operation overhead is why a Python <code>for</code> loop over a million numbers is slow.</p>
+
+<h2>2. Why NumPy and PyTorch are fast</h2>
+<p>They're not written in Python. They're Python <i>wrappers</i> around pre-compiled C/C++/CUDA code. When you call <code>np.sum(a)</code> Python makes <i>one</i> call, and the whole million-element loop then runs in optimised compiled code, often using SIMD instructions (Module 3). This is why AI work is written in Python (easy to read and glue together) while the heavy lifting runs in compiled code. A good habit: <b>express data work as whole-array operations rather than Python loops.</b></p>
+<pre><code>import numpy as np, time
+xs = list(range(5_000_000)); a = np.arange(5_000_000)
+t = time.time(); s = 0
+for v in xs: s += v * 2             # interpreter does work per element
+print("python loop", time.time() - t)
+t = time.time(); s = (a * 2).sum()  # one call into compiled code
+print("numpy      ", time.time() - t)   # typically 30-100x faster</code></pre>
+
+<h2>3. Follow a line down the stack</h2>
+<div class="widget"><h4>Interactive: the software stack</h4>
+  <p class="hint">Pick an example and press Step to follow it down through the layers. Greyed-out layers are not involved.</p>
+  <div class="controls" id="stk-ctl"></div>
+  <div class="stack" id="stk"></div>
+  <div id="stk-note" class="callout"></div></div>
+
+<h2>4. Libraries, packages and environments</h2>
+<p>Nobody writes everything from scratch. A <b>library</b> is reusable code; a <b>package</b> is a library you install (<code>pip install torch</code>) from an index (PyPI). Libraries depend on other libraries, which depend on specific versions of others. Project A needs <code>torch 1.13</code>, project B needs <code>torch 2.3</code>: they can't share one installation. Solutions:</p>
+<ul>
+  <li><b>Virtual environment</b> (<code>python -m venv .venv</code>, conda, uv): a private folder of packages per project.</li>
+  <li><b>Container</b> (Docker): bundles the app <i>and</i> its libraries and OS-level files into one portable image, which runs identically on your laptop, a cluster and the cloud. It's like a lightweight, isolated mini-computer sharing the host's kernel (not a full virtual machine).</li>
+  <li><b>Version pinning</b> (<code>requirements.txt</code>, lock files): record exact versions so results are reproducible.</li>
+</ul>
+<pre><code>python -m venv .venv && source .venv/bin/activate   # make + enter a private environment
+pip install numpy torch
+pip freeze &gt; requirements.txt                        # record exact versions
+python -c "import torch; print(torch.__version__, torch.cuda.is_available())"</code></pre>
+
+<div class="callout ai"><p><b>The GPU stack:</b> your app → AI library (PyTorch) → GPU libraries (CUDA, cuBLAS) → NVIDIA driver (OS-level) → GPU. Each layer must be compatible with the next. "CUDA version mismatch", <code>torch.cuda.is_available() == False</code> and "driver too old" are all <i>layer compatibility</i> problems, not bugs in the model.</p></div>
+
+<h2>5. The AI software ecosystem: what's what</h2>
+<p>When people say "the model", they usually mean a <b>file of numbers</b> (the weights from Module 1) plus a little configuration. To <i>use</i> it you need software that knows how to read the file and run the maths. The pieces:</p>
+<table>
+  <tr><th>Piece</th><th>What it is</th><th>Examples</th></tr>
+  <tr><td><b>Framework</b></td><td>A library for building and running neural networks; does the matrix maths on CPU or GPU (Module 3)</td><td>PyTorch, JAX, TensorFlow</td></tr>
+  <tr><td><b>Model file (weights)</b></td><td>The learned numbers, saved to disk. Different formats suit different tools; "safe" formats can't hide executable code, unlike Python's older <code>pickle</code> files</td><td><code>.safetensors</code>, <code>.gguf</code> (quantised, for laptops), <code>.pt</code></td></tr>
+  <tr><td><b>Model hub</b></td><td>A website that hosts models and datasets so you can download them, like an app store</td><td>Hugging Face Hub</td></tr>
+  <tr><td><b>Inference engine</b></td><td>A program specialised to run a model <i>quickly</i> (loading weights, generating tokens, handling several users)</td><td>llama.cpp, Ollama, vLLM</td></tr>
+  <tr><td><b>Hosted API</b></td><td>Someone else runs the engine; you send requests over HTTPS (Module 6) and pay per use (Module 12)</td><td>Claude API, other providers</td></tr>
+  <tr><td><b>Application</b></td><td>The product people use, built on one of the above</td><td>A chatbot, a coding assistant, a photo-tagging app</td></tr>
+</table>
+<pre><code># Two ways to get a reply. Same idea, different layers.
+
+# 1) Local: you run the model (needs the weights downloaded, ~GBs, and enough RAM/VRAM)
+from transformers import pipeline
+chat = pipeline("text-generation", model="some-small-model")     # downloads + loads the weights
+print(chat("Explain RAM in one sentence.", max_new_tokens=40))
+
+# 2) Hosted: someone else runs it; you send an HTTPS request (see Module 6 and Module 13)</code></pre>
+<div class="callout"><p><b>Don't run unknown code or weights blindly.</b> Downloading a model or package is running someone else's software on your computer. Prefer well-known sources, safe weight formats, and read what an installer wants to do. This theme returns in Module 13 (agents and tools).</p></div>
+
+<h2>6. Debugging with the stack in mind</h2>
+<table>
+  <tr><th>Symptom</th><th>Likely layer</th></tr>
+  <tr><td><code>SyntaxError</code>, <code>NameError</code></td><td>Your code</td></tr>
+  <tr><td><code>ModuleNotFoundError</code>, version conflicts</td><td>Environment / packages</td></tr>
+  <tr><td><code>RuntimeError: CUDA error</code>, driver mismatch</td><td>GPU libraries / driver</td></tr>
+  <tr><td><code>Killed</code>, <code>PermissionError</code>, "No space left"</td><td>Operating system</td></tr>
+  <tr><td>Slow Python loop</td><td>Interpreter (use whole-array operations)</td></tr>
+  <tr><td>Model gives a wrong or made-up answer</td><td><i>None of these.</i> The computer ran correctly; this is about the model itself (Module 11)</td></tr>
+</table>
+
+<div class="exercise">
+  <p>1) Run the loop-vs-NumPy timing above. How many times faster is NumPy on your machine? Then try <code>import dis; dis.dis(lambda a, b: a + b)</code> to see Python's bytecode.</p>
+  <p>2) Create a virtual environment, install a package in it, and confirm it is <i>not</i> available outside it.</p>
+  <p>3) Pick any model on the Hugging Face Hub. Find its file format, its file size and its parameter count. Divide size by parameters: how many bytes per parameter? Which number format (Module 1) does that suggest?</p>
+  <p>4) Which row of the ecosystem table would you use for (a) a company chatbot with data that must never leave the building, (b) a prototype built in an afternoon, (c) a chat model running offline on a laptop? Why?</p>
+</div>
+<h3>Key terms</h3>
+<p><b>machine code, compiler, interpreter, bytecode, JIT, vectorisation, library, package, dependency, virtual environment, container, CUDA, driver, framework, model file, safetensors/GGUF, model hub, inference engine, hosted API.</b></p>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m5.js"></script>
+</body></html>

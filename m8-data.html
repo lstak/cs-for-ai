@@ -1,0 +1,268 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Module 8 · Data: storage & manipulation</title><link rel="stylesheet" href="assets/style.css"></head>
+<body data-module="m8"><main>
+<header>
+  <p class="kicker">Module 8</p>
+  <h1>Data: storage &amp; manipulation</h1>
+  <p class="lead">AI is made of two ingredients: a model and data. Models learn from data, and every AI product stores something: users, conversations, documents, logs, embeddings. Choosing <i>how</i> to store data (which file format, which database) decides how fast you can work, how much it costs, and whether your system stays correct when many people use it at once. This module gives you the map.</p>
+  <ul class="goals">
+    <li>Tell structured, semi-structured and unstructured data apart.</li>
+    <li>Choose between CSV, JSON, JSON Lines, Parquet and other formats, with reasons.</li>
+    <li>Explain row-oriented vs column-oriented storage and why Parquet is fast for analytics.</li>
+    <li>Filter, group and join data with pandas and with SQL.</li>
+    <li>Explain what a database management system does (Postgres, SQLite, DuckDB), including transactions (ACID) and indexes.</li>
+    <li>Compare SQL and NoSQL (key–value, document, wide-column, graph) and vector databases, and pick one for a given job.</li>
+    <li>Describe where the data lives in typical AI systems (training sets, chat apps, RAG), and the basics of data quality and safety.</li>
+  </ul>
+</header>
+
+<h2>1. Kinds of data</h2>
+<p>Everything is bits (Module 1), but how those bits are <i>organised</i> matters:</p>
+<table>
+  <tr><th>Kind</th><th>Shape</th><th>Examples</th><th>Natural home</th></tr>
+  <tr><td><b>Structured</b></td><td>Tables with fixed columns and types</td><td>Customers, orders, sensor readings, request logs</td><td>CSV, Parquet, relational databases (SQL)</td></tr>
+  <tr><td><b>Semi-structured</b></td><td>Nested, flexible fields (a tree)</td><td>API responses, chat transcripts with lists of messages, configuration</td><td>JSON, JSON Lines, document databases</td></tr>
+  <tr><td><b>Unstructured</b></td><td>No fixed fields: raw content</td><td>Text documents, images, audio, video, PDFs</td><td>Files in folders or <i>object storage</i> (Module 12), with a table or database that points to them</td></tr>
+</table>
+<p><b>Data has a life cycle:</b> collect → store → clean → transform → use (train, analyse, serve) → keep or delete. Most of the real work in AI projects happens in the "clean" and "transform" steps, which is why the manipulation tools in this module matter so much. And "garbage in, garbage out": a model can only be as good as the data it learned from.</p>
+
+<h2>2. File formats</h2>
+<p>A <b>file format</b> is an agreement about how to write data into bytes. The same table can be written in many formats, each with different strengths. The four you'll meet most often:</p>
+<table>
+  <tr><th>Format</th><th>What it is</th><th>Strengths</th><th>Weaknesses</th></tr>
+  <tr><td><b>CSV</b><br>(comma-separated values)</td><td>Plain text, one row per line, values separated by commas</td><td>Universal: opens in Excel, any language, any editor. Human-readable. Great for small data and handing data to non-programmers</td><td><b>No types</b> (everything is text; is "007" a number?). No standard for missing values. Fragile quoting (commas and newlines inside values). Encoding trouble (UTF-8?). No nesting. Big and slow to parse. Must read the whole file even if you need one column</td></tr>
+  <tr><td><b>JSON</b></td><td>Plain text tree of objects and lists (Module 7)</td><td>Handles <b>nested and irregular</b> data. Has types: numbers, strings, booleans, null. Native to web APIs</td><td>Verbose (every row repeats every key). Slow to parse. No dates. Not good for huge flat tables</td></tr>
+  <tr><td><b>JSON Lines</b> (<code>.jsonl</code>)</td><td>One JSON object per line</td><td>Can be <b>streamed and appended</b> line by line, split easily, read without loading everything. The standard for chat datasets and logs</td><td>Same verbosity as JSON</td></tr>
+  <tr><td><b>Parquet</b></td><td>A <b>binary, column-oriented</b>, typed and compressed file format</td><td><b>Small</b> (often 3–10× smaller than CSV), <b>fast</b> (read only the columns you need, skip chunks by statistics), keeps types, supports nested data. The workhorse of big-data and ML pipelines</td><td>Not human-readable (you need a tool). Written in one go: not meant for editing individual rows. Overkill for tiny data</td></tr>
+</table>
+<p>Look at the same data in each format. The "nested chat" example shows why CSV struggles with anything that isn't a flat table.</p>
+
+<div class="widget"><h4>Interactive: the same data in four formats</h4>
+  <div class="controls" id="fm-ctl"></div>
+  <div class="mono" id="fm-out" style="white-space:pre-wrap;font-size:13px"></div>
+  <div class="callout" id="fm-note"></div></div>
+
+<h3>Why is Parquet so much faster? Rows vs columns</h3>
+<p>Storage is a long sequence of bytes. You must choose the <b>order</b> in which to lay a table out in it:</p>
+<ul>
+  <li><b>Row-oriented</b> (CSV, JSON, most databases' tables): all values of row 1, then row 2, and so on. Perfect when you want <i>whole records</i> ("show me user 42").</li>
+  <li><b>Column-oriented</b> (Parquet, analytics databases): all values of column 1, then column 2. Perfect when you want <i>a few columns across many rows</i> ("average tokens per request"). Values in a column are alike, so they also <b>compress</b> very well (for example, a column that has only "small" or "large" is stored as a short dictionary plus tiny codes).</li>
+</ul>
+<p>Disks and networks read data in <b>blocks</b> (Module 2). Reading a block costs the same whether you need one value or all of it, so a layout that puts the values you need next to each other means fewer blocks.</p>
+
+<div class="widget"><h4>Interactive: rows vs columns</h4>
+  <p class="hint">The strip shows how 60 values (12 rows × 5 columns) are laid out in storage, grouped into blocks of 6. Tick the columns your query needs. Blocks that must be read are outlined. Switch layouts and compare.</p>
+  <div class="controls" id="rc-ctl"></div>
+  <div id="rc-grid"></div>
+  <div class="readout" id="rc-out"></div></div>
+
+<div class="widget"><h4>Interactive: how big, how slow? (illustrative)</h4>
+  <p class="hint">A rough model of the same table in three formats. Assumptions: ~8 characters per value; JSON repeats the column names in every row; Parquet compresses ~4× and reads only the columns you need; parsing text costs CPU. Try 100 million rows, 30 columns, but only 3 columns needed.</p>
+  <div class="controls" id="sz-ctl"></div>
+  <div id="sz-out" class="readout"></div></div>
+
+<h3>When to use what</h3>
+<table>
+  <tr><th>Situation</th><th>Use</th><th>Why</th></tr>
+  <tr><td>Hand a small table to a colleague; quick export from a script</td><td>CSV</td><td>Everyone can open it. Keep it under a few hundred MB.</td></tr>
+  <tr><td>Data from or for a web API; configuration; irregular or nested records</td><td>JSON</td><td>Tree-shaped, and the web's native format (Module 7).</td></tr>
+  <tr><td>Fine-tuning data (one chat per example), logs, anything you append to or stream</td><td>JSON Lines</td><td>One record per line: append, split and stream easily.</td></tr>
+  <tr><td>Large tables for analysis or training; keeping types; repeated reads of a few columns</td><td>Parquet</td><td>Compact and fast (columnar, compressed, typed).</td></tr>
+  <tr><td>Many users reading and writing, updates in place, consistency needed</td><td>A database (section 4)</td><td>Files don't coordinate concurrent writers.</td></tr>
+  <tr><td>A whole small database in a single file, no server</td><td>SQLite</td><td>Ships with Python; ideal for prototypes and local apps.</td></tr>
+  <tr><td>Arrays and tensors (images, embeddings, model inputs)</td><td>NumPy <code>.npy</code>, HDF5, Zarr, or Arrow</td><td>Built for n-dimensional numeric arrays.</td></tr>
+  <tr><td>Images, audio, video, PDFs</td><td>The files themselves + a table (Parquet/DB) with their paths and labels</td><td>Don't stuff big binary blobs into CSV or JSON.</td></tr>
+  <tr><td>Model weights</td><td>safetensors, GGUF (Module 5)</td><td>Special formats; avoid Python <code>pickle</code>, which can run code when loaded.</td></tr>
+</table>
+<div class="callout"><p><b>Other formats you'll meet:</b> Excel <code>.xlsx</code> (for humans, not pipelines; it also silently "fixes" data, turning gene names into dates and dropping leading zeros), <b>Arrow/Feather</b> (the in-memory columnar format that pandas, Polars and DuckDB share, so they can exchange data without copying), <b>Avro/ORC</b> (other big-data formats), <b>YAML/TOML</b> (configuration), <b>XML</b> (older web and enterprise data), <b>pickle</b> (Python-only; never load a pickle from a source you don't trust).</p></div>
+
+<h2>3. Manipulating data</h2>
+<p>Most data work is a short list of operations, whatever the tool: <b>load</b>, <b>select</b> columns, <b>filter</b> rows, <b>group</b> and aggregate, <b>join</b> tables, <b>sort</b>, <b>save</b>. In Python the standard tool is <b>pandas</b> (or the faster <b>Polars</b>); in databases the same operations are written in <b>SQL</b>. Learn to think in operations, and you can switch between them.</p>
+<pre><code>import pandas as pd
+
+df = pd.read_csv("requests.csv", parse_dates=["time"])       # load  (a table called a DataFrame)
+df.head(); df.dtypes; df.isna().sum()                        # look: first rows, column types, missing values per column
+
+ok = df[df["status"] == "ok"]                                 # filter rows
+stats = ok.groupby("model")["tokens"].agg(["count", "mean"])  # group + aggregate
+df = df.merge(users, on="user", how="left")                   # join with another table
+
+df.to_parquet("requests.parquet", index=False)                # save as Parquet (needs pyarrow)
+slim = pd.read_parquet("requests.parquet", columns=["model", "tokens"])   # read only 2 columns!</code></pre>
+<p>The same operations in SQL (which you can also run directly on files with <b>DuckDB</b>: <code>SELECT ... FROM 'requests.parquet'</code>):</p>
+<pre><code>SELECT model, COUNT(*) AS n, AVG(tokens) AS avg_tokens
+FROM requests
+WHERE status = 'ok'
+GROUP BY model;</code></pre>
+
+<div class="widget"><h4>Interactive: query builder (SQL and pandas side by side)</h4>
+  <p class="hint">A small table of AI requests (14 rows) and a table of users. Build a query with the controls: filter, join, group, sort. You get the result, the SQL, and the equivalent pandas code.</p>
+  <div class="controls" id="qb-ctl"></div>
+  <div class="twocol">
+    <div><b>SQL</b><div class="mono" id="qb-sql" style="white-space:pre-wrap;font-size:13px"></div></div>
+    <div><b>pandas</b><div class="mono" id="qb-pd" style="white-space:pre-wrap;font-size:13px"></div></div>
+  </div>
+  <div id="qb-res" style="margin-top:8px"></div></div>
+
+<h3>Cleaning data for AI: a checklist</h3>
+<table>
+  <tr><th>Problem</th><th>What goes wrong</th><th>What to do</th></tr>
+  <tr><td><b>Missing values</b></td><td>Blank, "N/A", <code>-1</code> or <code>0</code> used to mean "unknown"</td><td>Count them (<code>df.isna().sum()</code>); decide to drop, fill or flag</td></tr>
+  <tr><td><b>Duplicates</b></td><td>The same example appears many times; the model memorises it, and evaluation is inflated</td><td><code>df.drop_duplicates()</code></td></tr>
+  <tr><td><b>Wrong types</b></td><td>Numbers read as text, dates as strings</td><td>Set types on load; prefer typed formats (Parquet)</td></tr>
+  <tr><td><b>Inconsistent text</b></td><td>"NL", "nl", "Netherlands"; mixed encodings</td><td>Normalise; use UTF-8 everywhere</td></tr>
+  <tr><td><b>Outliers and errors</b></td><td>A latency of -5 s, an age of 400</td><td>Plot and summarise (<code>df.describe()</code>); investigate before deleting</td></tr>
+  <tr><td><b>Data leakage</b></td><td>Test examples (or near copies) also in the training data, so scores look great and fail in real life</td><td>Split train / validation / test <b>before</b> any processing; split by user or by time, not by random row, when rows are related</td></tr>
+  <tr><td><b>Bias and imbalance</b></td><td>One group or class dominates; the model reflects it</td><td>Count categories; check results per group</td></tr>
+  <tr><td><b>Personal data (PII)</b></td><td>Names, emails and IDs in text end up in training sets or logs</td><td>Remove or mask; keep only what you need; follow the law (e.g. GDPR); remember that data baked into a trained model is hard to delete</td></tr>
+</table>
+
+<h2>4. Database management systems</h2>
+<p>You <i>can</i> keep everything in files. But files don't help when many people read and write at once, when you want one quick answer out of a billion rows, or when a crash happens halfway through an update. A <b>database management system (DBMS)</b> is software that stores data on disk and takes care of those jobs for you. <b>Analogy:</b> a librarian. You don't walk the shelves yourself; you ask, and the librarian finds the book, makes sure two people don't borrow the same copy, and keeps the records safe if the power fails.</p>
+<p>A DBMS provides: durable <b>storage</b> (Module 2), a <b>query language</b> (you say <i>what</i> you want and it decides <i>how</i> to get it), <b>indexes</b> for speed, <b>transactions</b> for correctness, <b>access control</b> (who may see what), and <b>backups</b>.</p>
+
+<h3>Relational databases and SQL</h3>
+<p>A <b>relational</b> database stores <b>tables</b>. Each table has typed <b>columns</b> and many <b>rows</b>. A <b>primary key</b> identifies each row uniquely; a <b>foreign key</b> in another table points to it. This lets you store each fact once and <b>join</b> tables when you need them together. The language is <b>SQL</b> (Structured Query Language), over 40 years old and still the most useful data skill there is.</p>
+<pre><code>-- A schema for a chat app (PostgreSQL)
+CREATE TABLE users    (id SERIAL PRIMARY KEY, email TEXT UNIQUE NOT NULL);
+CREATE TABLE chats    (id SERIAL PRIMARY KEY, user_id INT REFERENCES users(id), title TEXT);
+CREATE TABLE messages (id SERIAL PRIMARY KEY, chat_id INT REFERENCES chats(id),
+                       role TEXT NOT NULL, content TEXT NOT NULL, tokens INT,
+                       created_at TIMESTAMPTZ DEFAULT now());
+CREATE INDEX ON messages (chat_id);                         -- make "all messages of chat X" fast
+
+SELECT c.title, COUNT(*) AS n_messages, SUM(m.tokens) AS total_tokens
+FROM chats c JOIN messages m ON m.chat_id = c.id            -- join: combine rows that match
+WHERE c.user_id = 42
+GROUP BY c.title
+ORDER BY total_tokens DESC;</code></pre>
+<table>
+  <tr><th>SQL</th><th>What it does</th></tr>
+  <tr><td><code>SELECT … FROM … WHERE …</code></td><td>Read rows (the filter is <code>WHERE</code>)</td></tr>
+  <tr><td><code>GROUP BY</code> + <code>COUNT / SUM / AVG</code></td><td>Summarise groups of rows</td></tr>
+  <tr><td><code>JOIN … ON …</code></td><td>Combine tables through matching keys</td></tr>
+  <tr><td><code>ORDER BY</code>, <code>LIMIT</code></td><td>Sort and take the top few</td></tr>
+  <tr><td><code>INSERT</code>, <code>UPDATE</code>, <code>DELETE</code></td><td>Add, change, remove rows</td></tr>
+  <tr><td><code>CREATE TABLE</code>, <code>CREATE INDEX</code></td><td>Define structure and speed-ups</td></tr>
+  <tr><td><code>EXPLAIN</code></td><td>Show how the database plans to run a query (is it using the index?)</td></tr>
+</table>
+
+<h3>Transactions and ACID: don't lose the money</h3>
+<p>A <b>transaction</b> groups several changes into one all-or-nothing step. Moving €10 from Ann to Bob is two updates (subtract, add). If the power fails between them, the money vanishes. Relational databases promise <b>ACID</b>:</p>
+<ul>
+  <li><b>Atomicity</b>: all the steps happen, or none do.</li>
+  <li><b>Consistency</b>: rules (keys, <code>NOT NULL</code>, checks) are never broken by a committed transaction.</li>
+  <li><b>Isolation</b>: simultaneous transactions don't see each other's half-finished work.</li>
+  <li><b>Durability</b>: once the database says "committed", the change survives a crash (it is written to disk, Module 2).</li>
+</ul>
+<pre><code>BEGIN;
+UPDATE accounts SET balance = balance - 10 WHERE owner = 'ann';
+UPDATE accounts SET balance = balance + 10 WHERE owner = 'bob';
+COMMIT;      -- or ROLLBACK; to undo everything</code></pre>
+
+<h3>Indexes: the book's index</h3>
+<p>Without help, finding user 7,000,001 means reading every row until you hit it (a <b>full scan</b>). An <b>index</b> is a separate, sorted structure (usually a <b>B-tree</b>) that lets the database jump almost directly to the row: a few page reads instead of millions. The price: extra disk space, and every write must update the index too. Index the columns you search and join on, not everything.</p>
+
+<div class="widget"><h4>Interactive: full scan vs index lookup</h4>
+  <p class="hint">Find one row by its id. Illustrative numbers: a scan reads sequentially from an SSD at 3 GB/s; an index lookup needs a handful of random 100 µs page reads (Module 2). Slide the table size up.</p>
+  <div class="controls" id="ix-ctl"></div>
+  <div id="ix-bars" class="bars"></div>
+  <div class="readout" id="ix-out"></div></div>
+
+<h3>Which relational database?</h3>
+<table>
+  <tr><th>System</th><th>What it is</th><th>Use when</th></tr>
+  <tr><td><b>PostgreSQL</b> ("Postgres")</td><td>Free, open-source, full-featured <b>server</b> database. Strong SQL, reliable transactions, JSON (<code>JSONB</code>) and vector search (<code>pgvector</code> extension)</td><td>The sensible default for most web and AI applications</td></tr>
+  <tr><td><b>MySQL / MariaDB</b></td><td>Another popular open-source server database</td><td>Existing ecosystems; many websites</td></tr>
+  <tr><td><b>SQLite</b></td><td>A database as a <b>library</b>: one file, no server. Built into Python (<code>import sqlite3</code>)</td><td>Prototypes, local apps, phones, tests, small tools</td></tr>
+  <tr><td><b>DuckDB</b></td><td>An embedded database for <b>analytics</b>; queries Parquet/CSV files directly with SQL</td><td>Fast analysis on your laptop of files too big for pandas</td></tr>
+  <tr><td><b>Cloud data warehouses</b> (BigQuery, Snowflake, Redshift)</td><td>Managed, column-oriented systems that scan huge tables on many machines (Module 12)</td><td>Analytics on terabytes</td></tr>
+</table>
+<p><b>Client–server:</b> Postgres runs as a <b>server process</b> listening on a port (5432 by default, Module 6). Your application server (Module 7) connects with a <b>driver</b> using a connection string, sends SQL, and receives rows back, much like an HTTP request but with its own protocol. The database holds the data and the permissions; the application never reads its files directly.</p>
+<pre><code># Try SQLite right now (no installation; it ships with Python)
+import sqlite3
+con = sqlite3.connect("app.db")                         # creates the file if needed
+con.execute("CREATE TABLE IF NOT EXISTS messages (id INTEGER PRIMARY KEY, chat_id INT, role TEXT, content TEXT)")
+con.execute("INSERT INTO messages (chat_id, role, content) VALUES (?, ?, ?)", (1, "user", "What is DNS?"))
+con.commit()                                            # make it durable (end the transaction)
+for row in con.execute("SELECT role, content FROM messages WHERE chat_id = ?", (1,)):
+    print(row)</code></pre>
+<pre><code># Try PostgreSQL in a container (Module 5), then talk to it
+docker run --name pg -e POSTGRES_PASSWORD=change-me -p 5432:5432 -d postgres:16
+psql -h localhost -U postgres                     # an interactive SQL shell
+# Python:  pip install "psycopg[binary]"  ·  psycopg.connect("postgresql://postgres:change-me@localhost:5432/postgres")</code></pre>
+<div class="callout warn"><p><b>SQL injection.</b> Never build SQL by gluing user text into a string: <code>f"SELECT * FROM users WHERE name = '{name}'"</code>. If a user types <code>x' OR '1'='1</code> the query returns every user (and worse). Always use <b>parameters</b> (<code>?</code> or <code>%s</code> placeholders, as in the code above) so the database treats the input as data, never as commands. This is one of the most common web security holes (Module 7), and the same lesson applies to anything an AI model writes into a query (Module 13).</p></div>
+
+<h3>OLTP vs OLAP</h3>
+<p>Two very different workloads need two designs: <b>OLTP</b> (online transaction processing) means many small reads and writes of individual records, such as a web app, handled by row-oriented databases like Postgres. <b>OLAP</b> (online analytical processing) means a few huge queries that scan and aggregate millions of rows, such as "average cost per model per day over a year", handled by columnar systems such as Parquet + DuckDB or a warehouse. It is the rows-vs-columns idea again.</p>
+
+<h2>5. NoSQL: beyond tables</h2>
+<p>"<b>NoSQL</b>" (really "not only SQL") covers databases that don't use the relational table model. They were created to handle huge scale, very flexible data, or access patterns that tables handle poorly. Several families:</p>
+<table>
+  <tr><th>Family</th><th>Data model</th><th>Examples</th><th>Typical AI-era uses</th></tr>
+  <tr><td><b>Key–value</b></td><td>A giant dictionary: <code>key → value</code>, looked up by key only. Extremely fast, often in RAM</td><td>Redis, DynamoDB, Memcached</td><td>Caching answers, sessions, rate limits, counters</td></tr>
+  <tr><td><b>Document</b></td><td>JSON-like documents grouped in collections; no fixed schema</td><td>MongoDB, Firestore, CouchDB</td><td>Chat transcripts, product catalogues, user profiles with varying fields</td></tr>
+  <tr><td><b>Wide-column</b></td><td>Huge, sparse tables partitioned across many machines, optimised for very high write volume</td><td>Cassandra, HBase, Bigtable</td><td>Time series, telemetry, activity feeds at massive scale</td></tr>
+  <tr><td><b>Graph</b></td><td>Nodes and relationships; queries follow connections</td><td>Neo4j, Neptune</td><td>Social networks, fraud rings, knowledge graphs</td></tr>
+  <tr><td><b>Search engine</b></td><td>Inverted index for full-text search and filters</td><td>Elasticsearch, OpenSearch</td><td>Keyword search over documents and logs</td></tr>
+  <tr><td><b>Vector database</b></td><td>Stores <b>embeddings</b> (Module 11) and finds the nearest ones to a query vector</td><td><code>pgvector</code> (in Postgres), Qdrant, Chroma, Pinecone, FAISS</td><td><b>Semantic search and RAG</b>: "find the document chunks closest in meaning to this question"</td></tr>
+</table>
+<p>The trade-offs behind the choices:</p>
+<ul>
+  <li><b>Schema flexibility vs guarantees.</b> Document stores let each record look different, which is quick to start with but moves rule-checking from the database into your code. Relational databases make you design the structure up front and then enforce it.</li>
+  <li><b>Scaling out.</b> Many NoSQL systems were built to <b>shard</b> (split) data across many machines. A single Postgres server can already handle a great deal (many millions of rows and thousands of requests per second), and managed or distributed variants go further, so don't reach for scale you don't need.</li>
+  <li><b>Consistency vs availability.</b> When the network between a distributed database's machines breaks (Module 6), it must choose: stay <b>consistent</b> (some requests are refused) or stay <b>available</b> (replies might be stale). Many NoSQL systems choose <b>eventual consistency</b>: all copies agree, soon. Banks need strong consistency; a "likes" counter doesn't.</li>
+</ul>
+<div class="callout ai"><p><b>A good default:</b> start with <b>PostgreSQL</b>. It handles tables, JSON (<code>JSONB</code>) and, with <code>pgvector</code>, embeddings, all in one system with strong guarantees. Add a specialised store (Redis for caching, a warehouse for analytics) when you can <i>name</i> the problem it solves. This is a rule of thumb, not a law: serious scale or very special access patterns can justify something else.</p></div>
+<pre><code>-- Semantic search with pgvector: the 5 chunks nearest in meaning to the question's embedding
+SELECT content FROM chunks ORDER BY embedding &lt;=&gt; $1 LIMIT 5;     -- &lt;=&gt; = cosine distance between vectors</code></pre>
+
+<div class="widget"><h4>Interactive: pick the right storage</h4>
+  <p class="hint">Read each scenario, choose what you'd use, and press Check. Several answers are sometimes reasonable; the explanation says why.</p>
+  <div class="controls" id="pk-ctl"></div>
+  <div id="pk-scn" class="readout"></div>
+  <div id="pk-fb" class="callout"></div></div>
+
+<h2>6. Where the data lives in a typical AI system</h2>
+<table>
+  <tr><th>What</th><th>Where it usually lives</th><th>Why</th></tr>
+  <tr><td>Fine-tuning and evaluation examples</td><td>JSON Lines or Parquet files</td><td>Simple, streamable, versionable (Module 5: Git, or a dataset hub)</td></tr>
+  <tr><td>Big training tables, logs, experiment results</td><td>Parquet in object storage (Module 12), queried with DuckDB, Spark or a warehouse</td><td>Cheap, durable, fast for analytics</td></tr>
+  <tr><td>Users, conversations, billing</td><td>PostgreSQL (or another relational DB)</td><td>Transactions, relationships, access control</td></tr>
+  <tr><td>Recent answers, sessions, rate-limit counters</td><td>Redis</td><td>In-memory speed (Module 2)</td></tr>
+  <tr><td>Document chunks and their embeddings (for RAG)</td><td>A vector index (pgvector or a vector database)</td><td>Nearest-neighbour search by meaning</td></tr>
+  <tr><td>Images, audio, PDFs</td><td>Object storage, with paths and labels in a table</td><td>Big blobs are cheap there; the table makes them searchable</td></tr>
+  <tr><td>Model weights</td><td>Files (safetensors/GGUF) in object storage or a model hub</td><td>They're just big arrays of numbers (Module 1)</td></tr>
+</table>
+<p><b>A RAG pipeline end to end</b> (retrieval-augmented generation, Module 11): <i>documents → split into chunks → embed each chunk (numbers) → store in a vector database</i>. Then, per question: <i>embed the question → find the nearest chunks → paste them into the prompt → the model answers using them</i> (Module 13 shows how a tool does the lookup). Every box is a storage or format decision from this module.</p>
+
+<h2>7. Keeping data safe and correct</h2>
+<ul>
+  <li><b>Back up</b>, and test restoring. A common rule is 3 copies, on 2 kinds of storage, with 1 off-site. A database that cannot be restored is not a backup.</li>
+  <li><b>Encrypt</b> data in transit (TLS, Module 6) and at rest (on disk), and keep passwords and keys out of data files and code.</li>
+  <li><b>Least privilege.</b> Give each application the minimum database permissions (an AI feature that only reads should have a read-only account).</li>
+  <li><b>Validate input</b> at the edge (Module 7) and use parameterised queries.</li>
+  <li><b>Decide retention.</b> Keep only what you need, and for as long as you need it. Chat logs and training data often contain personal information.</li>
+  <li><b>Version your data</b> like code: know which dataset (and which cleaning) produced which model.</li>
+</ul>
+
+<div class="exercise">
+  <p>1) <b>Compare formats.</b> Take any CSV you have (or make one with 100,000 rows). With pandas, save it as CSV, JSON Lines and Parquet. Compare file sizes and the time to read one column from each. Do the results match the "how big, how slow?" widget?</p>
+  <p>2) In that widget, a table has 500 million rows and 60 columns, and an experiment needs 4 columns. Which format would you choose, and what are the three biggest reasons?</p>
+  <p>3) In the rows-vs-columns widget, tick all five columns. What happens to the advantage of the column layout? What kinds of query still prefer rows?</p>
+  <p>4) In the query builder, answer with SQL <i>and</i> pandas: (a) average latency per model for successful requests, (b) the three requests with the most tokens, (c) total tokens per country (hint: join), (d) how many requests failed for each plan.</p>
+  <p>5) Design the tables for a "saved chats" feature: users, chats, messages. What are the primary and foreign keys? Which column would you index, and why?</p>
+  <p>6) A teammate writes <code>cursor.execute("SELECT * FROM chats WHERE user = '" + name + "'")</code>. Explain what an attacker can do and fix the line.</p>
+  <p>7) Choose storage for each: (a) fine-tuning examples, (b) per-user rate limits, (c) 20 TB of logs for analytics, (d) similar-document search, (e) a bank-style balance. Justify each in one sentence. Then use the "pick the right storage" widget to check.</p>
+  <p>8) Run the SQLite snippet above. Open the file <code>app.db</code> with <code>sqlite3 app.db</code> (or a viewer) and run <code>SELECT * FROM messages;</code>.</p>
+</div>
+<h3>Key terms</h3>
+<p><b>structured / semi-structured / unstructured data, file format, CSV, JSON, JSON Lines, Parquet, schema, data type, row-oriented vs column-oriented, compression, block, pandas, DataFrame, filter, group by, join, aggregate, data leakage, train/validation/test split, PII, DBMS, relational database, table, primary key, foreign key, SQL, transaction, ACID, index, B-tree, full scan, OLTP vs OLAP, PostgreSQL, SQLite, DuckDB, data warehouse, SQL injection, parameterised query, NoSQL, key–value, document, wide-column, graph, vector database, embedding, shard, eventual consistency, RAG, backup.</b></p>
+<h3>Where to go next</h3>
+<ul><li>Work through a short SQL tutorial using SQLite (<code>SELECT</code>, <code>JOIN</code>, <code>GROUP BY</code>) · learn pandas or Polars properly · try DuckDB on a Parquet file · read about database indexes and query plans (<code>EXPLAIN</code>) · learn about data versioning and data pipelines (Airflow, dbt) · build a tiny RAG app with pgvector or Chroma.</li></ul>
+
+<div id="quiz"></div>
+</main>
+<script src="assets/common.js"></script><script src="assets/m8.js"></script>
+</body></html>
